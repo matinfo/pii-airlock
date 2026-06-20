@@ -98,3 +98,39 @@ def test_download_models_with_pip_reports_failed_models(monkeypatch):
     assert "Failed to install: en_model" in rendered
     expected = f'Try:  {sys.executable} -m pip install "https://example.test/en_model.whl"'
     assert expected in rendered
+
+
+def test_init_reports_ready(monkeypatch):
+    out = _capture_echo(monkeypatch)
+    monkeypatch.setattr(
+        cli, "_build_config", lambda lang, threshold: _fake_config({"en": "en_model"})
+    )
+    monkeypatch.setattr(cli, "_missing_proxy_deps", lambda: [])
+    monkeypatch.setattr(cli, "download_models", lambda lang: None)
+    monkeypatch.setattr(
+        cli, "_env_export_examples", lambda host, port: ["export OPENAI_BASE_URL=..."]
+    )
+
+    cli.init(host="127.0.0.1", port=8745, skip_models=False)
+
+    rendered = "\n".join(text for text, _ in out)
+    assert "Setup complete." in rendered
+    assert "pii-airlock proxy" in rendered
+
+
+def test_doctor_exits_nonzero_when_missing_requirements(monkeypatch):
+    out = _capture_echo(monkeypatch)
+    monkeypatch.setattr(
+        cli, "_build_config", lambda lang, threshold: _fake_config({"en": "en_model"})
+    )
+    monkeypatch.setattr(cli, "_has_pip", lambda: False)
+    monkeypatch.setattr(cli, "_missing_proxy_deps", lambda: ["httpx"])
+    monkeypatch.setattr(cli, "_model_installed", lambda model: False)
+
+    with pytest.raises(cli.typer.Exit) as exc:
+        cli.doctor()
+
+    assert exc.value.exit_code == 1
+    rendered = "\n".join(text for text, _ in out)
+    assert "[fail] gateway deps:" in rendered
+    assert "[fail] installed models:" in rendered

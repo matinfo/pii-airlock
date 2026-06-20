@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pluggable mapping stores (`memory` and `file`) with a shared factory, plus
   proxy wiring for configurable mapping backends (`mapping_backend`,
   `mapping_dir`) to support more scalable deployment patterns.
+- New usability commands:
+  - `pii-airlock init` for guided first-time gateway setup
+  - `pii-airlock doctor` for one-command local health checks
 
 ## [0.2.1] - 2026-06-20
 

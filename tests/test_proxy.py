@@ -6,6 +6,7 @@ Skipped entirely if the optional proxy deps (httpx/starlette) aren't installed.
 from __future__ import annotations
 
 import json
+import warnings
 
 import pytest
 
@@ -13,7 +14,6 @@ pytest.importorskip("httpx")
 pytest.importorskip("starlette")
 
 import httpx  # noqa: E402
-from starlette.testclient import TestClient  # noqa: E402
 
 from pii_scrub.mapping import Mapping  # noqa: E402
 from pii_scrub.proxy import build_app  # noqa: E402
@@ -62,6 +62,20 @@ def _app(handler):
     return build_app(engine=FakeEngine(), client=client)
 
 
+def _client(app):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                r"Using `httpx` with `starlette\.testclient` is deprecated; "
+                r"install `httpx2` instead\."
+            ),
+        )
+        from starlette.testclient import TestClient
+
+    return TestClient(app)
+
+
 def test_non_streaming_roundtrip():
     seen = {}
 
@@ -75,7 +89,7 @@ def test_non_streaming_roundtrip():
             json={"choices": [{"message": {"role": "assistant", "content": seen["sent"]}}]},
         )
 
-    client = TestClient(_app(upstream))
+    client = _client(_app(upstream))
     resp = client.post(
         "/openai/v1/chat/completions",
         json={"model": "gpt-x", "messages": [{"role": "user", "content": "call Alice"}]},
@@ -102,7 +116,7 @@ def test_streaming_roundtrip_restores_tokens():
             200, headers={"content-type": "text/event-stream"}, content=sse.encode()
         )
 
-    client = TestClient(_app(upstream))
+    client = _client(_app(upstream))
     resp = client.post(
         "/openai/v1/chat/completions",
         json={"model": "gpt-x", "stream": True,
@@ -132,7 +146,7 @@ def test_streaming_handles_crlf_event_boundaries():
             200, headers={"content-type": "text/event-stream"}, content=sse.encode()
         )
 
-    client = TestClient(_app(upstream))
+    client = _client(_app(upstream))
     resp = client.post(
         "/openai/v1/chat/completions",
         json={"model": "gpt-x", "stream": True,
@@ -150,7 +164,7 @@ def test_non_generation_endpoint_passes_through():
         # body must be forwarded unchanged for non-generation paths
         return httpx.Response(200, json={"data": ["model-a", "model-b"]})
 
-    client = TestClient(_app(upstream))
+    client = _client(_app(upstream))
     resp = client.get("/openai/v1/models")
     assert resp.status_code == 200
     assert resp.json()["data"] == ["model-a", "model-b"]
@@ -160,7 +174,7 @@ def test_unknown_provider_404():
     def upstream(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         return httpx.Response(200)
 
-    client = TestClient(_app(upstream))
+    client = _client(_app(upstream))
     assert client.post("/bogus/v1/x", json={}).status_code == 404
 
 
@@ -168,7 +182,7 @@ def test_healthz():
     def upstream(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         return httpx.Response(200)
 
-    client = TestClient(_app(upstream))
+    client = _client(_app(upstream))
     assert client.get("/healthz").status_code == 200
 
 
@@ -176,7 +190,7 @@ def test_upstream_failure_returns_502():
     def upstream(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")
 
-    client = TestClient(_app(upstream))
+    client = _client(_app(upstream))
     resp = client.post(
         "/openai/v1/chat/completions",
         json={"model": "x", "messages": [{"role": "user", "content": "hi"}]},
@@ -198,7 +212,7 @@ def test_missing_model_returns_503_and_does_not_leak():
 
     transport = httpx.MockTransport(upstream)
     app = build_app(engine=RaisingEngine(), client=httpx.AsyncClient(transport=transport))
-    resp = TestClient(app).post(
+    resp = _client(app).post(
         "/openai/v1/chat/completions",
         json={"model": "x", "messages": [{"role": "user", "content": "call Alice"}]},
     )
@@ -223,7 +237,7 @@ def test_proxy_uses_injected_mapping_store():
         client=httpx.AsyncClient(transport=transport),
         mapping_store=store,
     )
-    resp = TestClient(app).post(
+    resp = _client(app).post(
         "/openai/v1/chat/completions",
         json={"model": "x", "messages": [{"role": "user", "content": "call Alice"}]},
     )

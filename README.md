@@ -9,7 +9,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-**[2-min quickstart](#2-minute-quickstart) · [Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [Claude Code](#claude-code-hooks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md)**
+**[2-min quickstart](#2-minute-quickstart) · [Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [doctor](#doctor-health-checks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md)**
 
 `pii-airlock` is a local privacy layer for AI tools. It replaces personal data with placeholders before requests leave your machine, then restores originals in responses.
 
@@ -42,7 +42,7 @@ If you just want the safest default for most users:
 
 ```bash
 pipx install "pii-airlock[proxy]"
-pii-airlock download-models
+pii-airlock init
 pii-airlock proxy
 ```
 
@@ -69,7 +69,7 @@ Works the same on macOS, Linux and Windows.
 
 ```bash
 pipx install "pii-airlock[proxy]"   # recommended (gateway included)
-pii-airlock download-models         # one-time model setup (en + fr)
+pii-airlock init                    # guided setup (models + env hints)
 ```
 
 Latest from source (before a release lands on PyPI):
@@ -95,6 +95,14 @@ pipx inject pii-airlock 'pii-airlock[proxy]'
 If `download-models` reports that your interpreter has no `pip` (common in
 `pipx`), run the printed `pipx inject pii-airlock "<model-wheel-url>"` commands.
 The command now prints exact model wheel URLs for you.
+
+### doctor health checks
+
+```bash
+pii-airlock doctor
+```
+
+This checks proxy dependencies, model installation, and mapping roundtrip in one command.
 
 ### Quick verification (2 commands)
 
@@ -313,6 +321,12 @@ macOS/Windows). One platform nuance:
 ---
 
 ## Troubleshooting
+
+Run this first for a quick diagnosis:
+
+```bash
+pii-airlock doctor
+```
 
 **`.venv/bin/pytest: bad interpreter .../pii-scrub/...`**
 

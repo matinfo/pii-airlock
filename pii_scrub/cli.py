@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -206,13 +207,35 @@ def _inject_hint(models: list[str]) -> None:
             )
 
 
+def _configured_models(config: object) -> list[str]:
+    return [config.models[lc] for lc in config.languages if lc in config.models]
+
+
+def _missing_proxy_deps() -> list[str]:
+    required = ("httpx", "starlette", "uvicorn")
+    return [name for name in required if importlib.util.find_spec(name) is None]
+
+
+def _env_export_examples(host: str, port: int) -> list[str]:
+    url = f"http://{host}:{port}/openai"
+    if os.name == "nt":
+        return [
+            f'$env:OPENAI_BASE_URL = "{url}"   # PowerShell',
+            f"set OPENAI_BASE_URL={url}        # cmd.exe",
+        ]
+    return [
+        f"export OPENAI_BASE_URL={url}        # bash/zsh",
+        f"set -x OPENAI_BASE_URL {url}        # fish",
+    ]
+
+
 @app.command("download-models")
 def download_models(
     lang: str | None = typer.Option(None, "--lang", help="Languages, e.g. 'fr,en'."),
 ) -> None:
     """Download the spaCy models configured for the selected languages."""
     config = _build_config(lang, None)
-    models = [config.models[lc] for lc in config.languages if lc in config.models]
+    models = _configured_models(config)
     if not models:
         typer.echo("No models configured.", err=True)
         raise typer.Exit(code=1)
@@ -243,6 +266,113 @@ def download_models(
                 typer.echo(f'  Try:  {sys.executable} -m pip install "{url}"', err=True)
         raise typer.Exit(code=1)
     typer.echo("Done.", err=True)
+
+
+@app.command()
+def init(
+    host: str = typer.Option("127.0.0.1", "--host", help="Gateway bind address."),
+    port: int = typer.Option(8745, "--port", help="Gateway bind port."),
+    skip_models: bool = typer.Option(
+        False, "--skip-models", help="Skip model install/check during setup."
+    ),
+) -> None:
+    """Guided first-time setup for the gateway workflow."""
+    typer.echo("pii-airlock setup", err=True)
+    typer.echo("-----------------", err=True)
+
+    ok = True
+    missing_deps = _missing_proxy_deps()
+    if missing_deps:
+        ok = False
+        typer.echo(f"[needs action] Missing gateway deps: {', '.join(missing_deps)}", err=True)
+        typer.echo("  Run: pipx inject pii-airlock 'pii-airlock[proxy]'", err=True)
+    else:
+        typer.echo("[ok] Gateway dependencies installed", err=True)
+
+    config = _build_config(None, None)
+    models = _configured_models(config)
+    if not models:
+        ok = False
+        typer.echo("[needs action] No spaCy models configured.", err=True)
+    elif skip_models:
+        missing_models = [model for model in models if not _model_installed(model)]
+        if missing_models:
+            ok = False
+            typer.echo(
+                f"[needs action] Missing models: {', '.join(missing_models)} "
+                "(run `pii-airlock download-models`)",
+                err=True,
+            )
+        else:
+            typer.echo("[ok] Required spaCy models already installed", err=True)
+    else:
+        try:
+            download_models(None)
+            typer.echo("[ok] spaCy model setup complete", err=True)
+        except typer.Exit as exc:
+            ok = False
+            if exc.exit_code not in (0, None):
+                typer.echo("[needs action] Model setup needs manual completion.", err=True)
+
+    typer.echo("\nNext commands:", err=True)
+    typer.echo("  pii-airlock proxy", err=True)
+    for line in _env_export_examples(host, port):
+        typer.echo(f"  {line}", err=True)
+
+    if ok:
+        typer.echo("\nSetup complete.", err=True)
+    else:
+        typer.echo(
+            "\nSetup incomplete. Run the commands above, then retry `pii-airlock init`.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def doctor() -> None:
+    """Health checks for a local pii-airlock installation."""
+    config = _build_config(None, None)
+    models = _configured_models(config)
+    missing_models = [m for m in models if not _model_installed(m)]
+    missing_deps = _missing_proxy_deps()
+    has_pip = _has_pip()
+    m = Mapping()
+    mapping_ok = m.restore(m.token_for("PERSON", "A")) == "A"
+
+    checks: list[tuple[str, bool, str]] = [
+        ("Python", True, sys.executable),
+        ("pip available", has_pip, "found" if has_pip else "missing"),
+        (
+            "gateway deps",
+            not missing_deps,
+            "ok" if not missing_deps else f"missing: {', '.join(missing_deps)}",
+        ),
+        (
+            "configured models",
+            bool(models),
+            ", ".join(models) if models else "none",
+        ),
+        (
+            "installed models",
+            not missing_models,
+            "ok" if not missing_models else f"missing: {', '.join(missing_models)}",
+        ),
+        (
+            "mapping roundtrip",
+            mapping_ok,
+            "ok",
+        ),
+    ]
+
+    failed = False
+    for name, ok, detail in checks:
+        state = "ok" if ok else "fail"
+        typer.echo(f"[{state}] {name}: {detail}", err=True)
+        failed = failed or not ok
+
+    if failed:
+        raise typer.Exit(code=1)
 
 
 @app.command()
