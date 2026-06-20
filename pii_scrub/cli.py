@@ -168,6 +168,45 @@ def download_models(
     typer.echo("Done.", err=True)
 
 
+@app.command()
+def proxy(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    port: int = typer.Option(8745, "--port", help="Bind port."),
+    lang: str | None = typer.Option(None, "--lang", help="Languages, e.g. 'fr,en'."),
+    openai_url: str | None = typer.Option(None, "--openai-url", help="Override OpenAI upstream."),
+    anthropic_url: str | None = typer.Option(
+        None, "--anthropic-url", help="Override Anthropic upstream."
+    ),
+    gemini_url: str | None = typer.Option(None, "--gemini-url", help="Override Gemini upstream."),
+) -> None:
+    """Run the local privacy gateway (reverse proxy: scrub out, restore in).
+
+    Point a client at it via its base URL, e.g.:
+      OPENAI_BASE_URL=http://127.0.0.1:8745/openai
+      ANTHROPIC_BASE_URL=http://127.0.0.1:8745/anthropic
+    """
+    from .proxy import run
+
+    config = _build_config(lang, None)
+    upstreams = {}
+    if openai_url:
+        upstreams["openai"] = openai_url
+    if anthropic_url:
+        upstreams["anthropic"] = anthropic_url
+    if gemini_url:
+        upstreams["gemini"] = gemini_url
+
+    typer.echo(f"pii-scrub gateway on http://{host}:{port}  (languages: {config.languages})",
+               err=True)
+    typer.echo("  OpenAI    -> $OPENAI_BASE_URL    = "
+               f"http://{host}:{port}/openai", err=True)
+    typer.echo("  Anthropic -> $ANTHROPIC_BASE_URL = "
+               f"http://{host}:{port}/anthropic", err=True)
+    typer.echo("  Gemini    -> base path           = "
+               f"http://{host}:{port}/gemini", err=True)
+    run(host=host, port=port, config=config, upstreams=upstreams or None)
+
+
 @app.command("install-hook")
 def install_hook(
     event: str = typer.Option("both", "--event", help="both | tool | prompt"),

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pii-scrub"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local, reversible PII anonymizer (Microsoft Presidio) for LLM workflows and Claude Code"
 readme = "README.md"
 license = { text = "MIT" }
@@ -33,8 +33,15 @@ dependencies = [
 [project.optional-dependencies]
 docx = ["python-docx>=1.0"]
 pdf = ["pdfminer.six>=20221105"]
-all = ["python-docx>=1.0", "pdfminer.six>=20221105"]
-dev = ["pytest>=8.0", "ruff>=0.5"]
+proxy = ["httpx>=0.27", "starlette>=0.37", "uvicorn>=0.30"]
+all = [
+    "python-docx>=1.0",
+    "pdfminer.six>=20221105",
+    "httpx>=0.27",
+    "starlette>=0.37",
+    "uvicorn>=0.30",
+]
+dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "starlette>=0.37", "uvicorn>=0.30"]
 
 [project.scripts]
 pii-scrub = "pii_scrub.cli:app"
