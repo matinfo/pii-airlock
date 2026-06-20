@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Renamed to `pii-airlock`** for distribution. The PyPI package and the CLI
+  command are now `pii-airlock` (`pii-scrub` was unavailable on PyPI). Config
+  lives at `~/.config/pii-airlock/` and `./.pii-airlock.yaml`. The GitHub repo
+  (`pii-scrub`) and the internal Python package (`pii_scrub`) are unchanged.
+
 ### Fixed
 - **Gateway robustness:** upstream connection/timeout failures now return a clean
   `502` instead of a traceback; a missing spaCy model returns `503` and **never
@@ -25,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-06-20
 
 ### Added
-- **Universal gateway** (`pii-scrub proxy`): a local reverse proxy that scrubs
+- **Universal gateway** (`pii-airlock proxy`): a local reverse proxy that scrubs
   PII out of outbound requests and restores it in responses (including SSE
   streams), for any provider. Base-URL shim — no TLS interception.
 - **Payload adapters** (`pii_scrub/payload.py`): provider-agnostic core with

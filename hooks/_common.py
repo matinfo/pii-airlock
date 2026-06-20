@@ -83,7 +83,7 @@ def run_pre_tool_use() -> None:
                 "hookEventName": "PreToolUse",
                 "permissionDecision": decision,
                 "permissionDecisionReason": (
-                    f"pii-scrub: PII detected in {tool} input — {summary}. "
+                    f"pii-airlock: PII detected in {tool} input — {summary}. "
                     "Review before this leaves your machine."
                 ),
             }
@@ -105,13 +105,13 @@ def run_user_prompt_submit() -> None:
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": (
-                f"⚠ pii-scrub: your prompt appears to contain PII — {summary}. "
-                "Consider scrubbing it (`pii-scrub scrub`) before sending."
+                f"⚠ pii-airlock: your prompt appears to contain PII — {summary}. "
+                "Consider scrubbing it (`pii-airlock scrub`) before sending."
             ),
         }
     }
     if config.hook_decision == "deny":
         # Block the prompt entirely.
         payload["decision"] = "block"
-        payload["reason"] = f"pii-scrub blocked prompt: PII detected — {summary}."
+        payload["reason"] = f"pii-airlock blocked prompt: PII detected — {summary}."
     _emit(payload)

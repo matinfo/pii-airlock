@@ -11,8 +11,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: pii-scrub version
-      placeholder: "e.g. 0.2.0  (pii-scrub --version)"
+      label: pii-airlock version
+      placeholder: "e.g. 0.2.0  (pii-airlock --version)"
     validations:
       required: true
   - type: dropdown

@@ -22,7 +22,7 @@ def test_install_both_creates_two_events(monkeypatch, tmp_path):
     assert "PreToolUse" in data["hooks"]
     assert "UserPromptSubmit" in data["hooks"]
     cmd = data["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
-    assert cmd == "pii-scrub hook pre-tool-use"
+    assert cmd == "pii-airlock hook pre-tool-use"
     assert data["hooks"]["PreToolUse"][0]["matcher"]  # tool matcher present
 
 

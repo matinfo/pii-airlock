@@ -21,7 +21,7 @@ class MissingExtra(RuntimeError):
     def __init__(self, extra: str, package: str) -> None:
         super().__init__(
             f"This format requires the optional '{extra}' dependency.\n"
-            f"Install it with:  pip install 'pii-scrub[{extra}]'   (provides {package})"
+            f"Install it with:  pip install 'pii-airlock[{extra}]'   (provides {package})"
         )
 
 

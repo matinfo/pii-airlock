@@ -1,4 +1,4 @@
-"""pii-scrub command-line interface."""
+"""pii-airlock command-line interface."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ app.add_typer(hook_app, name="hook")
 
 def _version_cb(value: bool) -> None:
     if value:
-        typer.echo(f"pii-scrub {__version__}")
+        typer.echo(f"pii-airlock {__version__}")
         raise typer.Exit()
 
 
@@ -196,7 +196,7 @@ def proxy(
     if gemini_url:
         upstreams["gemini"] = gemini_url
 
-    typer.echo(f"pii-scrub gateway on http://{host}:{port}  (languages: {config.languages})",
+    typer.echo(f"pii-airlock gateway on http://{host}:{port}  (languages: {config.languages})",
                err=True)
     typer.echo("  OpenAI    -> $OPENAI_BASE_URL    = "
                f"http://{host}:{port}/openai", err=True)

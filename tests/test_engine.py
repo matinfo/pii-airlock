@@ -2,7 +2,7 @@
 
 We stub `ScrubEngine.detect` so the span-replacement and de-dup logic can be
 tested fast and offline. A live end-to-end check belongs in the verification
-suite (requires `pii-scrub download-models`).
+suite (requires `pii-airlock download-models`).
 """
 
 from pii_scrub.engine import Detection, ScrubEngine, _dedupe_overlaps

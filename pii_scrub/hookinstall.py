@@ -1,4 +1,4 @@
-"""Register / inspect pii-scrub hooks in a Claude Code settings.json.
+"""Register / inspect pii-airlock hooks in a Claude Code settings.json.
 
 Kept free of heavy imports so it stays fast and unit-testable.
 """
@@ -13,8 +13,8 @@ USER_SETTINGS = Path.home() / ".claude" / "settings.json"
 
 # event name -> (console command, optional tool matcher)
 HOOK_SPECS: dict[str, tuple[str, str | None]] = {
-    "PreToolUse": ("pii-scrub hook pre-tool-use", "Bash|Write|Edit|MultiEdit|Read"),
-    "UserPromptSubmit": ("pii-scrub hook user-prompt-submit", None),
+    "PreToolUse": ("pii-airlock hook pre-tool-use", "Bash|Write|Edit|MultiEdit|Read"),
+    "UserPromptSubmit": ("pii-airlock hook user-prompt-submit", None),
 }
 
 # CLI --event value -> list of settings event names
