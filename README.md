@@ -302,8 +302,6 @@ echo "Call John Smith at john@example.com" | pii-scrub scrub --map /tmp/test.pii
 
 If pii-scrub helps you keep PII out of your AI tools, a ⭐ helps others find it.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=matinfo/pii-scrub&type=Date)](https://star-history.com/#matinfo/pii-scrub&Date)
-
 ---
 
 ## License
