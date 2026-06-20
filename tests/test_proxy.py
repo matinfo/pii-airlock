@@ -143,3 +143,38 @@ def test_healthz():
 
     client = TestClient(_app(upstream))
     assert client.get("/healthz").status_code == 200
+
+
+def test_upstream_failure_returns_502():
+    def upstream(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    client = TestClient(_app(upstream))
+    resp = client.post(
+        "/openai/v1/chat/completions",
+        json={"model": "x", "messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert resp.status_code == 502
+    assert "upstream request failed" in resp.text
+
+
+def test_missing_model_returns_503_and_does_not_leak():
+    class RaisingEngine:
+        def scrub(self, text, mapping, language=None):
+            raise RuntimeError("No spaCy models configured for languages ['en', 'fr'].")
+
+    sent = {}
+
+    def upstream(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        sent["hit"] = True
+        return httpx.Response(200, json={})
+
+    transport = httpx.MockTransport(upstream)
+    app = build_app(engine=RaisingEngine(), client=httpx.AsyncClient(transport=transport))
+    resp = TestClient(app).post(
+        "/openai/v1/chat/completions",
+        json={"model": "x", "messages": [{"role": "user", "content": "call Alice"}]},
+    )
+    assert resp.status_code == 503
+    assert "download-models" in resp.text
+    assert "hit" not in sent  # never forwarded upstream → no PII leak on failure
