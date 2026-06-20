@@ -7,10 +7,23 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        # Full Python range on Linux; representative versions on macOS + Windows
+        # to prove cross-OS behaviour without a 15-job matrix.
+        os: [ubuntu-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: macos-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.13"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,5 +36,6 @@ jobs:
       - name: Lint
         run: ruff check .
       - name: Test
-        # Unit tests stub out Presidio/spaCy, so no model download is needed here.
+        # Unit tests stub out Presidio/spaCy, so no model download is needed.
+        # The proxy tests exercise the real ASGI stack with a mocked upstream.
         run: pytest -q
