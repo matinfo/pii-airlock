@@ -1,0 +1,19 @@
+# Mapping files contain REAL PII — never commit them.
+*.pii-map.json
+*.pii-map.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS
+.DS_Store

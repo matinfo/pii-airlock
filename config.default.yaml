@@ -1,0 +1,29 @@
+# pii-scrub default configuration.
+# Override at ~/.config/pii-scrub/config.yaml or project ./.pii-scrub.yaml,
+# then by CLI flags (highest priority).
+
+# Languages to detect. Each must have an entry in `models` below and the
+# corresponding spaCy model installed (`pii-scrub download-models`).
+languages:
+  - en
+  - fr
+
+# Map language code -> spaCy model. Add a language by installing its model
+# (python -m spacy download <model>) and adding a line here.
+models:
+  en: en_core_web_lg
+  fr: fr_core_news_lg
+
+# Minimum confidence (0.0–1.0) for a detection to count.
+score_threshold: 0.5
+
+# Entity types to scrub. Empty list = all entities Presidio recognizes.
+# Examples: PERSON, EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, IP_ADDRESS,
+#           IBAN_CODE, LOCATION, URL, DATE_TIME
+entities: []
+
+# Default decision returned by the Claude Code hooks when PII is found:
+#   ask  -> prompt the user to confirm (non-blocking, recommended)
+#   deny -> block the action
+#   warn -> add context only, never block
+hook_decision: ask
