@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Renamed to `pii-airlock`** (`pii-scrub` was unavailable on PyPI). The PyPI
+  package, the CLI command, and the GitHub repository are now `pii-airlock`;
+  config lives at `~/.config/pii-airlock/` and `./.pii-airlock.yaml`. Only the
+  internal Python import package stays `pii_scrub` (invisible to users).
+
 ### Fixed
 - **Gateway robustness:** upstream connection/timeout failures now return a clean
   `502` instead of a traceback; a missing spaCy model returns `503` and **never
@@ -25,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2026-06-20
 
 ### Added
-- **Universal gateway** (`pii-scrub proxy`): a local reverse proxy that scrubs
+- **Universal gateway** (`pii-airlock proxy`): a local reverse proxy that scrubs
   PII out of outbound requests and restores it in responses (including SSE
   streams), for any provider. Base-URL shim — no TLS interception.
 - **Payload adapters** (`pii_scrub/payload.py`): provider-agnostic core with
@@ -59,6 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-hook`.
 - Config override chain: bundled defaults → user → project → CLI flags.
 
-[Unreleased]: https://github.com/matinfo/pii-scrub/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/matinfo/pii-scrub/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/matinfo/pii-scrub/releases/tag/v0.1.0
+[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/matinfo/pii-airlock/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/matinfo/pii-airlock/releases/tag/v0.1.0

@@ -2,8 +2,8 @@
 
 Override chain (lowest -> highest priority):
     bundled config.default.yaml
-    ~/.config/pii-scrub/config.yaml
-    ./.pii-scrub.yaml
+    ~/.config/pii-airlock/config.yaml
+    ./.pii-airlock.yaml
     CLI flags (applied by the caller)
 """
 
@@ -16,13 +16,13 @@ from typing import Any
 
 import yaml
 
-# Shipped inside the package so it is always found, however pii-scrub is installed.
+# Shipped inside the package so it is always found, however pii-airlock is installed.
 _DEFAULT_FILE = Path(__file__).resolve().parent / "config.default.yaml"
 _CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-_USER_FILE = _CONFIG_HOME / "pii-scrub" / "config.yaml"
-_PROJECT_FILE = Path.cwd() / ".pii-scrub.yaml"
+_USER_FILE = _CONFIG_HOME / "pii-airlock" / "config.yaml"
+_PROJECT_FILE = Path.cwd() / ".pii-airlock.yaml"
 
-# Built-in defaults. These make pii-scrub work even if no config file is found,
+# Built-in defaults. These make pii-airlock work even if no config file is found,
 # so an install can never end up with an empty model map. The bundled
 # config.default.yaml mirrors these for users to copy and override.
 _DEFAULT_MODELS = {"en": "en_core_web_lg", "fr": "fr_core_news_lg"}

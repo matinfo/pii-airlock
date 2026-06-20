@@ -5,7 +5,7 @@ bodies have PII replaced with stable tokens before they leave the machine;
 inbound responses (including SSE streams) have the real values restored, so the
 client never knows the difference.
 
-    client ──http──▶ pii-scrub proxy ──https──▶ provider API
+    client ──http──▶ pii-airlock proxy ──https──▶ provider API
             ◀────────  (restore)  ◀──────────  (scrub)
 
 No TLS interception: the client connects to this local plaintext endpoint, and
@@ -46,7 +46,7 @@ def _require_deps():
     except ModuleNotFoundError as exc:  # pragma: no cover - import guard
         raise SystemExit(
             "The proxy requires extra dependencies.\n"
-            "Install them with:  pip install 'pii-scrub[proxy]'"
+            "Install them with:  pip install 'pii-airlock[proxy]'"
         ) from exc
 
 
@@ -118,8 +118,8 @@ def build_app(
                     # e.g. spaCy model not installed — fail loud, don't leak by
                     # silently forwarding the original PII.
                     return Response(
-                        f"pii-scrub: cannot scrub request — {exc}\n"
-                        "Run `pii-scrub download-models`.",
+                        f"pii-airlock: cannot scrub request — {exc}\n"
+                        "Run `pii-airlock download-models`.",
                         status_code=503,
                     )
                 body = json.dumps(scrubbed, ensure_ascii=False).encode("utf-8")
@@ -134,7 +134,7 @@ def build_app(
         try:
             upstream_resp = await client.send(upstream_req, stream=True)
         except httpx.HTTPError as exc:
-            return Response(f"pii-scrub: upstream request failed — {exc}", status_code=502)
+            return Response(f"pii-airlock: upstream request failed — {exc}", status_code=502)
 
         resp_headers = {
             k: v for k, v in upstream_resp.headers.items()

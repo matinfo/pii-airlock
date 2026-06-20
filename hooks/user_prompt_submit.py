@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Claude Code UserPromptSubmit hook: warn/block when the prompt contains PII.
 
-Usable either via the console script (`pii-scrub hook user-prompt-submit`) or
+Usable either via the console script (`pii-airlock hook user-prompt-submit`) or
 directly (`python -m hooks.user_prompt_submit`).
 """
 

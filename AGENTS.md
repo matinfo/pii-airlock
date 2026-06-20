@@ -1,6 +1,6 @@
-# Integrating pii-scrub with AI coding agents
+# Integrating pii-airlock with AI coding agents
 
-pii-scrub keeps real PII out of LLM traffic for the agents and clients you
+pii-airlock keeps real PII out of LLM traffic for the agents and clients you
 already use. There are two integration styles:
 
 - **Gateway** — point the client's *base URL* at the local proxy. Transparent,
@@ -12,8 +12,8 @@ already use. There are two integration styles:
 Start the gateway once:
 
 ```bash
-pipx inject pii-scrub 'pii-scrub[proxy]'
-pii-scrub proxy            # http://127.0.0.1:8745  (127.0.0.1 only by default)
+pipx inject pii-airlock 'pii-airlock[proxy]'
+pii-airlock proxy            # http://127.0.0.1:8745  (127.0.0.1 only by default)
 ```
 
 ---
@@ -42,8 +42,8 @@ Claude Code is agentic — it moves files and runs commands. Use the **hooks** s
 PII is surfaced without disturbing the tool loop:
 
 ```bash
-pii-scrub install-hook            # both events, project scope
-pii-scrub install-hook --scope user
+pii-airlock install-hook            # both events, project scope
+pii-airlock install-hook --scope user
 ```
 
 | Leak vector | Covered by |
@@ -88,7 +88,7 @@ In `~/.continue/config.json`, set `apiBase` on the model:
 ```json
 {
   "models": [
-    { "title": "via pii-scrub", "provider": "openai",
+    { "title": "via pii-airlock", "provider": "openai",
       "model": "gpt-4o", "apiBase": "http://127.0.0.1:8745/openai" }
   ]
 }
@@ -128,7 +128,7 @@ it, add tests. PRs welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 ## Verify it's working
 
 ```bash
-pii-scrub proxy &
+pii-airlock proxy &
 export OPENAI_BASE_URL=http://127.0.0.1:8745/openai
 # Run your client with a fake email/name in the prompt, then check the provider
 # dashboard / logs: you should see <EMAIL_ADDRESS_1>, not the real value, while

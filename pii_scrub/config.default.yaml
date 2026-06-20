@@ -1,9 +1,9 @@
-# pii-scrub default configuration.
-# Override at ~/.config/pii-scrub/config.yaml or project ./.pii-scrub.yaml,
+# pii-airlock default configuration.
+# Override at ~/.config/pii-airlock/config.yaml or project ./.pii-airlock.yaml,
 # then by CLI flags (highest priority).
 
 # Languages to detect. Each must have an entry in `models` below and the
-# corresponding spaCy model installed (`pii-scrub download-models`).
+# corresponding spaCy model installed (`pii-airlock download-models`).
 languages:
   - en
   - fr

@@ -1,4 +1,4 @@
-# Contributing to pii-scrub
+# Contributing to pii-airlock
 
 Thanks for helping make PII safer for AI workflows. Contributions of all kinds
 are welcome: bug reports, docs, new language configs, and new provider adapters.
@@ -6,8 +6,8 @@ are welcome: bug reports, docs, new language configs, and new provider adapters.
 ## Quick start
 
 ```bash
-git clone https://github.com/matinfo/pii-scrub
-cd pii-scrub
+git clone https://github.com/matinfo/pii-airlock
+cd pii-airlock
 python -m venv .venv && . .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -e ".[dev,all]"
 ```

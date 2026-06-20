@@ -1,6 +1,6 @@
 """Word .docx — scrub paragraph and table text, keep document structure.
 
-Optional dependency: python-docx  (pip install 'pii-scrub[docx]')
+Optional dependency: python-docx  (pip install 'pii-airlock[docx]')
 
 Text is scrubbed at paragraph granularity so that entities spanning multiple
 runs are still caught; when a paragraph changes, its runs are collapsed into a

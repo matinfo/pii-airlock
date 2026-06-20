@@ -1,1 +1,1 @@
-"""Claude Code guardrail hooks for pii-scrub."""
+"""Claude Code guardrail hooks for pii-airlock."""
