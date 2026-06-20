@@ -2,7 +2,7 @@
 
 > **Keep real personal data out of your AI tools — locally, reversibly, with any provider.**
 
-[![CI](https://github.com/matinfo/pii-scrub/actions/workflows/ci.yml/badge.svg)](https://github.com/matinfo/pii-scrub/actions/workflows/ci.yml)
+[![CI](https://github.com/matinfo/pii-airlock/actions/workflows/ci.yml/badge.svg)](https://github.com/matinfo/pii-airlock/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pii-airlock.svg)](https://pypi.org/project/pii-airlock/)
 ![Python](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
@@ -45,7 +45,7 @@ pii-airlock download-models       # one-time: fetch the NLP models (en + fr)
 Latest from source (before a release lands on PyPI):
 
 ```bash
-pipx install git+https://github.com/matinfo/pii-scrub
+pipx install git+https://github.com/matinfo/pii-airlock
 ```
 
 Optional format support (plain text, CSV and JSON work out of the box):
@@ -278,7 +278,7 @@ macOS/Windows). One platform nuance:
 ## Development
 
 ```bash
-git clone https://github.com/matinfo/pii-scrub
+git clone https://github.com/matinfo/pii-airlock
 cd pii-airlock
 pip install -e ".[dev]"
 ruff check .

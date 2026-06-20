@@ -7,7 +7,7 @@ seriously.
 
 **Please do not open a public issue for security problems.**
 
-Report privately via GitHub's **["Report a vulnerability"](https://github.com/matinfo/pii-scrub/security/advisories/new)**
+Report privately via GitHub's **["Report a vulnerability"](https://github.com/matinfo/pii-airlock/security/advisories/new)**
 button (repository → *Security* → *Advisories*). We aim to acknowledge within
 72 hours and to publish a fix and advisory once a patch is available.
 

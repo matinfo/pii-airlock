@@ -47,10 +47,10 @@ dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "starlette>=0.37", "uvicorn>=0
 pii-airlock = "pii_scrub.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/matinfo/pii-scrub"
-Documentation = "https://github.com/matinfo/pii-scrub#readme"
-Issues = "https://github.com/matinfo/pii-scrub/issues"
-Changelog = "https://github.com/matinfo/pii-scrub/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/matinfo/pii-airlock"
+Documentation = "https://github.com/matinfo/pii-airlock#readme"
+Issues = "https://github.com/matinfo/pii-airlock/issues"
+Changelog = "https://github.com/matinfo/pii-airlock/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pii_scrub", "hooks"]
