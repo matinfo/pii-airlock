@@ -1,3 +1,5 @@
+import os
+
 from pii_scrub.mapping import Mapping
 
 
@@ -28,7 +30,9 @@ def test_save_load_roundtrip(tmp_path):
     m.token_for("EMAIL_ADDRESS", "jean@acme.fr")
     p = tmp_path / "x.pii-map.json"
     m.save(p)
-    assert oct(p.stat().st_mode)[-3:] == "600"
+    # POSIX permission bits; Windows ignores chmod, so assert only there.
+    if os.name == "posix":
+        assert oct(p.stat().st_mode)[-3:] == "600"
 
     loaded = Mapping.load(p)
     assert loaded.restore("<PERSON_1> <EMAIL_ADDRESS_1>") == "Jean Dupont jean@acme.fr"

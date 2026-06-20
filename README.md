@@ -3,7 +3,9 @@
 Local, **reversible** PII anonymizer built on [Microsoft Presidio](https://microsoft.github.io/presidio/).  
 Keep real personal data off LLM round-trips — replace it with stable placeholder tokens, send the scrubbed text to the model, then swap the originals back in from a local mapping file.
 
-Everything runs **100% locally**. No data ever leaves your machine.
+**Detection and substitution run entirely on your machine.** The CLI pipe and the Claude Code hooks send nothing anywhere. The optional gateway *does* forward traffic to the provider you point it at — but only **after** PII has been replaced with tokens. Real personal data never reaches the provider.
+
+Runs on **macOS, Linux and Windows**, Python ≥ 3.10.
 
 ---
 
@@ -77,13 +79,23 @@ automatically), universal (every provider speaks HTTP), and enforceable (a clien
 only knows the proxy URL can't leak around it).
 
 - **No TLS interception.** Your client talks plain HTTP to `localhost`; the proxy makes
-  the real HTTPS call upstream. No certificates to install.
-- **Auth passes through** untouched and is **never logged**.
-- A **fresh in-memory mapping per request** — nothing is written to disk.
+  the real HTTPS call upstream. No certificates to install. Bind stays on `127.0.0.1` by default.
+- **Auth passes through** untouched and pii-scrub never logs request headers or bodies.
+  (uvicorn runs at log level `warning`, so request lines aren't logged either.)
+- A **fresh in-memory mapping per request** — the gateway writes nothing to disk.
+- **Concurrency-safe:** detection is serialized with a lock, so the engine is shared
+  safely across simultaneous requests.
 
-> Adding a provider = one small payload adapter (`pii_scrub/payload.py`): the three
-> built-in wire formats (OpenAI-compatible, Anthropic, Gemini) already cover most tools.
-> Gemini's non-SSE streaming is buffered then restored (one response instead of a live stream).
+**Provider coverage** — three wire formats, each with an adapter in `pii_scrub/payload.py`:
+
+| Route | Wire format | Covers | Streaming |
+|---|---|---|---|
+| `/openai` | OpenAI Chat Completions | OpenAI, Codex, Cursor, Continue, Ollama, LiteLLM, vLLM, … | SSE ✅ |
+| `/anthropic` | Anthropic Messages | Claude SDKs, Claude-compatible tools | SSE ✅ |
+| `/gemini` | Gemini generateContent | Google Gemini | SSE ✅ · array-stream buffered |
+
+Adapters are verified by unit + integration tests (mocked upstream) against each
+provider's documented request/response shapes. Adding a provider = one small adapter.
 
 ---
 
@@ -175,7 +187,7 @@ models:
   fr: fr_core_news_lg
 score_threshold: 0.5
 entities: []          # empty = all entities Presidio recognizes
-hook_decision: ask    # ask | deny | warn
+hook_decision: ask    # ask (surface + confirm) | deny (block)
 ```
 
 ### Adding a language
@@ -193,15 +205,58 @@ models:
 
 ---
 
+## Guarantees & limitations
+
+**What pii-scrub guarantees**
+
+- **Reversibility is exact.** Any value the engine tokenized is restored byte-for-byte
+  via the mapping. `restore(scrub(text))` round-trips for tokenized spans.
+- **Determinism.** The same value gets the same token within a mapping, so coreference
+  is preserved for the model.
+- **Tokens are opaque & safe.** Restored values are re-inserted through proper JSON
+  encoding; values containing quotes, newlines or `<…>` won't corrupt payloads.
+- **Local-only detection.** Detection never makes a network call. Only the gateway
+  forwards (already-scrubbed) traffic onward.
+
+**What it does *not* guarantee — read this**
+
+- **Detection is best-effort, not complete.** Presidio + spaCy are statistical; they
+  miss and mis-tag entities (more so with `_sm` models, or for phone numbers with odd
+  spacing). pii-scrub reduces exposure — it is **not** a guarantee that every piece of
+  PII is removed. Review sensitive material; raise `score_threshold` or add custom
+  recognizers as needed.
+- **Gateway scope.** Only generation endpoints are scrubbed (chat/messages/generateContent).
+  Embeddings and other endpoints pass through unchanged. Tokens are restored in message
+  **content**, not inside tool-call/function arguments a model may emit.
+- **Gemini array streaming** (without `alt=sse`) is buffered, then restored as one
+  response rather than streamed live.
+- **`.docx`** scrubbing rewrites changed paragraphs into a single run, so inline
+  formatting within those paragraphs is not preserved. **PDF** is extract-only → scrubbed
+  text out (no PDF re-render).
+
+---
+
+## Platform support
+
+Tested in CI on **Linux, macOS and Windows** (Python 3.10–3.14 on Linux; 3.12–3.13 on
+macOS/Windows). One platform nuance:
+
+- Mapping files are created with mode **`0600` on POSIX** (macOS/Linux). **On Windows**
+  `chmod` is a no-op; the file inherits your account's default ACLs — typically already
+  user-private in a home directory. Treat mapping files as secrets regardless (below).
+
+---
+
 ## ⚠ Security: the mapping file holds real PII
 
 `*.pii-map.json` contains the **original personal data** in plain text.
 
-- pii-scrub writes mapping files with `0600` permissions (owner read/write only).
+- Created owner-only (`0600` on POSIX; default user ACLs on Windows — see above).
 - The bundled `.gitignore` excludes `*.pii-map.json` and `*.pii-map.*`.
 - **Never commit mapping files.**
 - Delete them when you no longer need to restore.
 - Use `--no-map` when reversibility isn't required.
+- The gateway keeps its mapping in memory only and discards it after each response.
 
 ---
 

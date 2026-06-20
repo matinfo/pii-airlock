@@ -168,7 +168,9 @@ async def _restore_stream(upstream_resp, adapter, mapping):
     restorer = StreamRestorer(mapping.restore)
     buffer = ""
     async for text in upstream_resp.aiter_text():
-        buffer += text
+        # Normalize CRLF so event boundaries split regardless of provider style.
+        # (SSE clients accept LF; data lines are single JSON lines, so this is safe.)
+        buffer += text.replace("\r\n", "\n")
         while "\n\n" in buffer:
             event, _, buffer = buffer.partition("\n\n")
             yield _restore_event(event, adapter, restorer) + "\n\n"

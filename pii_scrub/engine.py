@@ -7,6 +7,7 @@ token format and reversibility through a Mapping.
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -30,6 +31,9 @@ class ScrubEngine:
 
     def __init__(self, config: Config | None = None) -> None:
         self.config = config or load_config()
+        # spaCy pipelines are not thread-safe; serialize analysis so the engine
+        # can be shared across threads (e.g. the proxy's request handlers).
+        self._lock = threading.Lock()
 
     # --- lazy, expensive Presidio objects --------------------------------
 
@@ -66,7 +70,9 @@ class ScrubEngine:
             return []
         lang = language or self.config.languages[0]
         entities = self.config.entities or None
-        results = self._analyzer.analyze(text=text, language=lang, entities=entities)
+        # The lock also guards the first lazy build of _analyzer.
+        with self._lock:
+            results = self._analyzer.analyze(text=text, language=lang, entities=entities)
         return [
             Detection(r.entity_type, r.start, r.end, r.score)
             for r in results

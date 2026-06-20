@@ -46,3 +46,33 @@ def test_dedupe_prefers_higher_score():
     kept = _dedupe_overlaps(overlapping)
     assert len(kept) == 1
     assert kept[0].entity_type == "LOCATION"
+
+
+def test_detect_serializes_concurrent_calls():
+    """The engine lock must prevent concurrent entry into the (unsafe) analyzer."""
+    import threading
+    import time
+
+    class FakeAnalyzer:
+        def __init__(self):
+            self.inside = 0
+            self.max_concurrent = 0
+
+        def analyze(self, text, language, entities):
+            self.inside += 1
+            self.max_concurrent = max(self.max_concurrent, self.inside)
+            time.sleep(0.005)  # widen the race window
+            self.inside -= 1
+            return []
+
+    eng = ScrubEngine()
+    fake = FakeAnalyzer()
+    eng.__dict__["_analyzer"] = fake  # prime cached_property, bypass real build
+
+    threads = [threading.Thread(target=lambda: eng.detect("x", "en")) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert fake.max_concurrent == 1  # never two threads inside analyze at once

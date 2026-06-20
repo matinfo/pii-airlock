@@ -91,6 +91,33 @@ def test_streaming_roundtrip_restores_tokens():
     assert text == "call Alice"
 
 
+def test_streaming_handles_crlf_event_boundaries():
+    def upstream(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        token = body["messages"][0]["content"].split("call ")[1]
+        # provider that uses CRLF SSE separators
+        sse = (
+            f'data: {json.dumps({"choices": [{"delta": {"content": "call "}}]})}\r\n\r\n'
+            f'data: {json.dumps({"choices": [{"delta": {"content": token}}]})}\r\n\r\n'
+            "data: [DONE]\r\n\r\n"
+        )
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, content=sse.encode()
+        )
+
+    client = TestClient(_app(upstream))
+    resp = client.post(
+        "/openai/v1/chat/completions",
+        json={"model": "gpt-x", "stream": True,
+              "messages": [{"role": "user", "content": "call Alice"}]},
+    )
+    text = ""
+    for line in resp.text.splitlines():
+        if line.startswith("data:") and "[DONE]" not in line:
+            text += json.loads(line[5:].strip())["choices"][0]["delta"].get("content", "")
+    assert text == "call Alice"
+
+
 def test_non_generation_endpoint_passes_through():
     def upstream(request: httpx.Request) -> httpx.Response:
         # body must be forwarded unchanged for non-generation paths

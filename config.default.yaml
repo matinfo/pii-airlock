@@ -23,7 +23,6 @@ score_threshold: 0.5
 entities: []
 
 # Default decision returned by the Claude Code hooks when PII is found:
-#   ask  -> prompt the user to confirm (non-blocking, recommended)
-#   deny -> block the action
-#   warn -> add context only, never block
+#   ask  -> surface the PII and let the user confirm (recommended)
+#   deny -> block the action / prompt outright
 hook_decision: ask

@@ -63,12 +63,23 @@ class Mapping:
         }
 
     def save(self, path: str | Path) -> None:
+        """Write the mapping as JSON, owner-only.
+
+        Created with mode 0600 from the start (no world-readable window) on
+        POSIX. On Windows the mode argument is ignored by the OS, so the file
+        inherits the user's default ACLs — typically already user-private in a
+        home directory. See the README security note.
+        """
         path = Path(path)
-        path.write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        data = json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(data)
+        # O_CREAT's mode only applies when creating; tighten a pre-existing file too.
         try:
             os.chmod(path, 0o600)
         except OSError:
-            pass  # best effort (e.g. on filesystems without POSIX perms)
+            pass  # best effort (e.g. filesystems without POSIX perms)
 
     @classmethod
     def load(cls, path: str | Path) -> Mapping:
