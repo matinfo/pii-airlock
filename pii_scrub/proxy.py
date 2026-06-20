@@ -10,15 +10,17 @@ client never knows the difference.
 
 No TLS interception: the client connects to this local plaintext endpoint, and
 the proxy makes the real HTTPS call upstream. Auth headers pass through verbatim
-and are never logged. A fresh in-memory mapping is used per request and is
-discarded immediately after the response — nothing touches disk.
+and are never logged. A fresh mapping object is used per request (with a
+configurable backend).
 """
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from .config import Config, load_config
+from .mapping_store import build_mapping_store
 from .payload import (
     StreamRestorer,
     get_adapter,
@@ -59,6 +61,7 @@ def build_app(
     upstreams: dict[str, str] | None = None,
     engine=None,
     client=None,
+    mapping_store=None,
 ):
     """Build the Starlette ASGI app for the gateway.
 
@@ -82,10 +85,15 @@ def build_app(
     client = client if client is not None else httpx.AsyncClient(
         timeout=httpx.Timeout(600.0, connect=10.0)
     )
+    mapping_store = mapping_store if mapping_store is not None else build_mapping_store(
+        config.mapping_backend,
+        root=Path(config.mapping_dir) if config.mapping_dir else None,
+    )
 
     async def handle(request: Request) -> Response:
         provider = request.path_params["provider"]
         path = request.path_params["path"]
+        map_key: str | None = None
         try:
             adapter = get_adapter(provider)
         except ValueError:
@@ -101,7 +109,7 @@ def build_app(
         }
 
         # --- scrub outbound (generation endpoints with a JSON body only) ---
-        mapping = _new_mapping()
+        mapping = mapping_store.create()
         scrub_this = _is_generation_endpoint(adapter, path) and bool(body)
         if scrub_this:
             try:
@@ -123,6 +131,8 @@ def build_app(
                         status_code=503,
                     )
                 body = json.dumps(scrubbed, ensure_ascii=False).encode("utf-8")
+                map_key = mapping_store.save(mapping)
+                mapping = mapping_store.load(map_key)
 
         # Forward the raw query string so multi-value params (and Gemini's ?key=)
         # are preserved exactly.
@@ -134,6 +144,8 @@ def build_app(
         try:
             upstream_resp = await client.send(upstream_req, stream=True)
         except httpx.HTTPError as exc:
+            if map_key is not None:
+                mapping_store.delete(map_key)
             return Response(f"pii-airlock: upstream request failed — {exc}", status_code=502)
 
         resp_headers = {
@@ -145,7 +157,13 @@ def build_app(
         # --- restore inbound: stream (SSE) ---
         if scrub_this and content_type.startswith("text/event-stream"):
             return StreamingResponse(
-                _restore_stream(upstream_resp, adapter, mapping),
+                _restore_stream(
+                    upstream_resp,
+                    adapter,
+                    mapping,
+                    mapping_store=mapping_store,
+                    map_key=map_key,
+                ),
                 status_code=upstream_resp.status_code,
                 headers=resp_headers,
                 media_type="text/event-stream",
@@ -161,6 +179,8 @@ def build_app(
                 raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
             except ValueError:
                 pass  # not JSON after all (e.g. an error page) — pass through
+        if map_key is not None:
+            mapping_store.delete(map_key)
         return Response(raw, status_code=upstream_resp.status_code, headers=resp_headers)
 
     async def health(_request: Request) -> Response:
@@ -173,30 +193,38 @@ def build_app(
               methods=["GET", "POST", "PUT", "PATCH", "DELETE"]),
     ]
     app = Starlette(routes=routes)
+
     app.state.engine = engine
+    app.state.mapping_store = mapping_store
     return app
 
 
-async def _restore_stream(upstream_resp, adapter, mapping):
+async def _restore_stream(
+    upstream_resp, adapter, mapping, mapping_store=None, map_key: str | None = None
+):
     """Yield SSE events with tokens restored, reassembling tokens split across chunks."""
     restorer = StreamRestorer(mapping.restore)
     buffer = ""
-    async for text in upstream_resp.aiter_text():
-        # Normalize CRLF so event boundaries split regardless of provider style.
-        # (SSE clients accept LF; data lines are single JSON lines, so this is safe.)
-        buffer += text.replace("\r\n", "\n")
-        while "\n\n" in buffer:
-            event, _, buffer = buffer.partition("\n\n")
-            yield _restore_event(event, adapter, restorer) + "\n\n"
-    if buffer.strip():
-        yield _restore_event(buffer, adapter, restorer) + "\n\n"
-    # Flush any held-back token tail as one final, provider-shaped chunk.
-    tail = restorer.flush()
-    if tail:
-        chunk = adapter.text_chunk(tail)
-        if chunk is not None:
-            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-    await upstream_resp.aclose()
+    try:
+        async for text in upstream_resp.aiter_text():
+            # Normalize CRLF so event boundaries split regardless of provider style.
+            # (SSE clients accept LF; data lines are single JSON lines, so this is safe.)
+            buffer += text.replace("\r\n", "\n")
+            while "\n\n" in buffer:
+                event, _, buffer = buffer.partition("\n\n")
+                yield _restore_event(event, adapter, restorer) + "\n\n"
+        if buffer.strip():
+            yield _restore_event(buffer, adapter, restorer) + "\n\n"
+        # Flush any held-back token tail as one final, provider-shaped chunk.
+        tail = restorer.flush()
+        if tail:
+            chunk = adapter.text_chunk(tail)
+            if chunk is not None:
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+    finally:
+        await upstream_resp.aclose()
+        if map_key is not None and mapping_store is not None:
+            mapping_store.delete(map_key)
 
 
 def _restore_event(raw_event: str, adapter, restorer: StreamRestorer) -> str:
@@ -209,12 +237,6 @@ def _restore_event(raw_event: str, adapter, restorer: StreamRestorer) -> str:
     restored = restore_sse_data(data, adapter, restorer)
     prefix = f"event: {event_name}\n" if event_name else ""
     return f"{prefix}data: {restored}"
-
-
-def _new_mapping():
-    from .mapping import Mapping
-
-    return Mapping()
 
 
 def run(

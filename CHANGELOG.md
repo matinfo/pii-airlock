@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-20
+
 ### Fixed
 - `download-models` in pip-less environments (common with `pipx`) now exits
   successfully when configured models are already installed, instead of always
@@ -15,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - README and AGENTS docs now include user-first troubleshooting for common
   setup errors (`bad interpreter`, `No module named spacy`, missing proxy deps).
+
+### Added
+- Pluggable mapping stores (`memory` and `file`) with a shared factory, plus
+  proxy wiring for configurable mapping backends (`mapping_backend`,
+  `mapping_dir`) to support more scalable deployment patterns.
 
 ## [0.2.1] - 2026-06-20
 
@@ -66,7 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-hook`.
 - Config override chain: bundled defaults → user → project → CLI flags.
 
-[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/matinfo/pii-airlock/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/matinfo/pii-airlock/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/matinfo/pii-airlock/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/matinfo/pii-airlock/releases/tag/v0.1.0

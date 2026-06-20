@@ -26,3 +26,11 @@ entities: []
 #   ask  -> surface the PII and let the user confirm (recommended)
 #   deny -> block the action / prompt outright
 hook_decision: ask
+
+# Mapping storage backend (advanced):
+#   memory -> process-local ephemeral mappings (default; fastest)
+#   file   -> save mappings under `mapping_dir` or ./.pii-airlock-maps
+mapping_backend: memory
+
+# Optional directory for mapping_backend: file
+# mapping_dir: /absolute/path/to/pii-airlock-maps

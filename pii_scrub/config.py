@@ -35,6 +35,8 @@ class Config:
     score_threshold: float = 0.5
     entities: list[str] = field(default_factory=list)
     hook_decision: str = "ask"
+    mapping_backend: str = "memory"
+    mapping_dir: str | None = None
 
     def merged_with(self, data: dict[str, Any]) -> Config:
         """Return a copy with non-None keys from `data` applied."""

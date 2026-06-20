@@ -29,6 +29,33 @@ class FakeEngine:
         return text
 
 
+class CountingStore:
+    def __init__(self):
+        self.created = 0
+        self.saved = 0
+        self.loaded = 0
+        self.deleted = 0
+        self._mapping = None
+        self._key = "k1"
+
+    def create(self) -> Mapping:
+        self.created += 1
+        return Mapping()
+
+    def save(self, mapping: Mapping, *, key: str | None = None) -> str:
+        self.saved += 1
+        self._mapping = mapping
+        return key or self._key
+
+    def load(self, key: str) -> Mapping:
+        self.loaded += 1
+        assert self._mapping is not None
+        return self._mapping
+
+    def delete(self, key: str) -> None:
+        self.deleted += 1
+
+
 def _app(handler):
     transport = httpx.MockTransport(handler)
     client = httpx.AsyncClient(transport=transport)
@@ -178,3 +205,30 @@ def test_missing_model_returns_503_and_does_not_leak():
     assert resp.status_code == 503
     assert "download-models" in resp.text
     assert "hit" not in sent  # never forwarded upstream → no PII leak on failure
+
+
+def test_proxy_uses_injected_mapping_store():
+    store = CountingStore()
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            json={"choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+        )
+
+    transport = httpx.MockTransport(upstream)
+    app = build_app(
+        engine=FakeEngine(),
+        client=httpx.AsyncClient(transport=transport),
+        mapping_store=store,
+    )
+    resp = TestClient(app).post(
+        "/openai/v1/chat/completions",
+        json={"model": "x", "messages": [{"role": "user", "content": "call Alice"}]},
+    )
+    assert resp.status_code == 200
+    assert store.created == 1
+    assert store.saved == 1
+    assert store.loaded == 1
+    assert store.deleted == 1

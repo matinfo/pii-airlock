@@ -1,6 +1,6 @@
 # pii-airlock
 
-> **Keep real personal data out of your AI tools — locally, reversibly, with any provider.**
+> **Keep real personal data out of AI prompts in minutes — local, reversible, and provider-agnostic.**
 
 [![CI](https://github.com/matinfo/pii-airlock/actions/workflows/ci.yml/badge.svg)](https://github.com/matinfo/pii-airlock/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pii-airlock.svg)](https://pypi.org/project/pii-airlock/)
@@ -9,26 +9,56 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-**[Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [Claude Code](#claude-code-hooks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md) · [Security](#-security-the-mapping-file-holds-real-pii)**
+**[2-min quickstart](#2-minute-quickstart) · [Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [Claude Code](#claude-code-hooks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md)**
 
-Local, **reversible** PII anonymizer built on [Microsoft Presidio](https://microsoft.github.io/presidio/).
-Replace real personal data with stable placeholder tokens, send the scrubbed text to the model, then swap the originals back in from a local mapping file.
+`pii-airlock` is a local privacy layer for AI tools. It replaces personal data with placeholders before requests leave your machine, then restores originals in responses.
 
-**Detection and substitution run entirely on your machine.** The CLI pipe and the Claude Code hooks send nothing anywhere. The optional gateway *does* forward traffic to the provider you point it at — but only **after** PII has been replaced with tokens. Real personal data never reaches the provider.
+Example:
 
-Runs on **macOS, Linux and Windows**, Python ≥ 3.10. Detects English + French out of the box, [any spaCy language](#adding-a-language) via config.
+```text
+John Smith (john@acme.com) → <PERSON_1> (<EMAIL_ADDRESS_1>)
+```
+
+Runs on **macOS, Linux, Windows** (Python ≥ 3.10). Built on [Microsoft Presidio](https://microsoft.github.io/presidio/).
 
 ---
 
-## Three workflows
+## Why people use pii-airlock
 
-| Workflow | What it does | Works with |
-|---|---|---|
-| **Gateway** (proxy) | Transparent scrub-out / restore-in on the wire | OpenAI, Codex, Anthropic, Gemini, Cursor, Continue, … |
-| **CLI pipe** | `pii-airlock scrub` → LLM → `pii-airlock restore` — reversible, scriptable | anything |
-| **Claude Code hooks** | Detect PII before it reaches the model, on prompts *and* tool data | Claude Code |
+| Problem | What pii-airlock gives you |
+|---|---|
+| You use multiple AI clients/providers | One local gateway URL for all of them |
+| You need reversible anonymization | Stable placeholders + local mapping file |
+| You use Claude Code tools/files | Native hooks for prompt + tool-data checks |
+| You want to avoid vendor lock-in | Provider adapters: OpenAI-style, Anthropic, Gemini |
 
-All three share one detection engine — provider knowledge lives only in small payload adapters.
+Detection happens locally. Gateway traffic is forwarded only after PII is replaced.
+
+---
+
+## 2-minute quickstart
+
+If you just want the safest default for most users:
+
+```bash
+pipx install "pii-airlock[proxy]"
+pii-airlock download-models
+pii-airlock proxy
+```
+
+Then set your client base URL:
+
+```bash
+export OPENAI_BASE_URL=http://127.0.0.1:8745/openai
+```
+
+PowerShell:
+
+```powershell
+$env:OPENAI_BASE_URL = "http://127.0.0.1:8745/openai"
+```
+
+Now prompts are scrubbed before provider calls, and responses are restored automatically.
 
 ---
 
@@ -38,8 +68,8 @@ Requires Python ≥ 3.10 and [pipx](https://pipx.pypa.io/) (recommended) or pip.
 Works the same on macOS, Linux and Windows.
 
 ```bash
-pipx install "pii-airlock[proxy]" # gateway-ready install (recommended)
-pii-airlock download-models       # one-time: fetch NLP models (en + fr)
+pipx install "pii-airlock[proxy]"   # recommended (gateway included)
+pii-airlock download-models         # one-time model setup (en + fr)
 ```
 
 Latest from source (before a release lands on PyPI):
@@ -77,9 +107,8 @@ echo "Replied to <PERSON_1> on <EMAIL_ADDRESS_1>." | pii-airlock restore --map /
 
 ## Universal gateway (any provider)
 
-The gateway is a **local reverse proxy**. Point any LLM client at it via the client's
-base-URL setting; the proxy scrubs PII out of outbound requests and restores the real
-values in the responses — including streamed ones. The client never sees the difference.
+The gateway is the easiest mode for non-technical users: point your AI client at
+`localhost`, and pii-airlock handles scrub/restore automatically.
 
 ```
   your app ──http──▶ pii-airlock gateway ──https──▶ provider API
@@ -105,10 +134,7 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:8745/anthropic
 #   https://generativelanguage.googleapis.com  ->  http://127.0.0.1:8745/gemini
 ```
 
-**Why a proxy?** It's the only interception point that is simultaneously transparent
-(configure once), bidirectional (scrubs the prompt *and* restores the answer
-automatically), universal (every provider speaks HTTP), and enforceable (a client that
-only knows the proxy URL can't leak around it).
+**Why this is practical:** configure once, keep existing clients, and avoid changing prompt habits.
 
 - **No TLS interception.** Your client talks plain HTTP to `localhost`; the proxy makes
   the real HTTPS call upstream. No certificates to install. Bind stays on `127.0.0.1` by default.
@@ -126,8 +152,7 @@ only knows the proxy URL can't leak around it).
 | `/anthropic` | Anthropic Messages | Claude SDKs, Claude-compatible tools | SSE ✅ |
 | `/gemini` | Gemini generateContent | Google Gemini | SSE ✅ · array-stream buffered |
 
-Adapters are verified by unit + integration tests (mocked upstream) against each
-provider's documented request/response shapes. Adding a provider = one small adapter.
+Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, Codex, Cursor, Continue, Aider, Gemini).
 
 ---
 
@@ -220,7 +245,15 @@ models:
 score_threshold: 0.5
 entities: []          # empty = all entities Presidio recognizes
 hook_decision: ask    # ask (surface + confirm) | deny (block)
+
+# Advanced (proxy runtime):
+mapping_backend: memory   # memory (default) | file
+# mapping_dir: /var/lib/pii-airlock/maps
 ```
+
+For higher-volume/self-hosted setups, `mapping_backend: file` can be useful for
+debugging or operational inspection. `memory` stays the safest default for local
+use because mappings are ephemeral.
 
 ### Adding a language
 
