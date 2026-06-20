@@ -15,5 +15,8 @@ venv/
 .ruff_cache/
 .mypy_cache/
 
+# Local tooling
+.codegraph/
+
 # OS
 .DS_Store
