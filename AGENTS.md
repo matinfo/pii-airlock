@@ -31,6 +31,9 @@ pii-airlock download-models
 If your pipx environment is pip-less, `download-models` prints exact
 `pipx inject pii-airlock "<model-wheel-url>"` commands for each model.
 
+If you see `No module named spacy`, run `pii-airlock download-models` from the
+same shell/environment where you launch your agent client.
+
 ---
 
 ## Setting an environment variable (all platforms)

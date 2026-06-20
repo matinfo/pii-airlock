@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `download-models` in pip-less environments (common with `pipx`) now exits
+  successfully when configured models are already installed, instead of always
+  failing.
+
+### Changed
+- README and AGENTS docs now include user-first troubleshooting for common
+  setup errors (`bad interpreter`, `No module named spacy`, missing proxy deps).
+
 ## [0.2.1] - 2026-06-20
 
 ### Fixed

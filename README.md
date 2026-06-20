@@ -9,7 +9,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-**[Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [Claude Code](#claude-code-hooks) · [All agents →](AGENTS.md) · [Security](#-security-the-mapping-file-holds-real-pii)**
+**[Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [Claude Code](#claude-code-hooks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md) · [Security](#-security-the-mapping-file-holds-real-pii)**
 
 Local, **reversible** PII anonymizer built on [Microsoft Presidio](https://microsoft.github.io/presidio/).
 Replace real personal data with stable placeholder tokens, send the scrubbed text to the model, then swap the originals back in from a local mapping file.
@@ -51,15 +51,27 @@ pipx install git+https://github.com/matinfo/pii-airlock
 Optional format support (plain text, CSV and JSON work out of the box):
 
 ```bash
-pipx inject pii-airlock 'pii-airlock[proxy]'  # universal gateway (any provider)
 pipx inject pii-airlock 'pii-airlock[docx]'   # Word .docx
 pipx inject pii-airlock 'pii-airlock[pdf]'    # PDF (text extraction)
 pipx inject pii-airlock 'pii-airlock[all]'    # everything
 ```
 
+If you installed without gateway support and need it later:
+
+```bash
+pipx inject pii-airlock 'pii-airlock[proxy]'
+```
+
 If `download-models` reports that your interpreter has no `pip` (common in
 `pipx`), run the printed `pipx inject pii-airlock "<model-wheel-url>"` commands.
 The command now prints exact model wheel URLs for you.
+
+### Quick verification (2 commands)
+
+```bash
+echo "Contact John Smith at john@example.com" | pii-airlock scrub --map /tmp/test.pii-map.json
+echo "Replied to <PERSON_1> on <EMAIL_ADDRESS_1>." | pii-airlock restore --map /tmp/test.pii-map.json
+```
 
 ---
 
@@ -267,6 +279,48 @@ macOS/Windows). One platform nuance:
 
 ---
 
+## Troubleshooting
+
+**`.venv/bin/pytest: bad interpreter .../pii-scrub/...`**
+
+Your venv points to an old repo path. Recreate it:
+
+```bash
+rm -rf .venv
+python3 -m venv .venv
+.venv/bin/python -m pip install -U pip
+.venv/bin/python -m pip install -e '.[dev]'
+```
+
+**`No module named spacy` when running `python -m spacy ...`**
+
+You are likely using system Python instead of the `pii-airlock` environment.
+Use:
+
+```bash
+pii-airlock download-models
+```
+
+**`download-models` says this interpreter has no pip**
+
+This is normal in many `pipx` environments. Run the exact `pipx inject` command
+printed by `download-models` for each model wheel URL.
+
+**`pii-airlock proxy` fails with missing `httpx` / `starlette` / `uvicorn`**
+
+Install gateway dependencies:
+
+```bash
+pipx inject pii-airlock 'pii-airlock[proxy]'
+```
+
+**`OSError: [E050] Can't find model ...` after download**
+
+Install the model wheel directly into the same environment where `pii-airlock`
+runs (the command prints the exact wheel URL in this case).
+
+---
+
 ## ⚠ Security: the mapping file holds real PII
 
 `*.pii-map.json` contains the **original personal data** in plain text.
@@ -301,6 +355,10 @@ echo "Call John Smith at john@example.com" | pii-airlock scrub --map /tmp/test.p
 ## Community
 
 - 🧩 **[Integrate with your agent](AGENTS.md)** — Claude Code, Cursor, Codex, Gemini, Continue, Aider, …
+- ❓ **Need help?** Open a **[bug report](https://github.com/matinfo/pii-airlock/issues/new/choose)** with:
+  - `pii-airlock --version`
+  - your install method (`pipx` or `pip`)
+  - the exact command and full error output
 - 🤝 **[Contributing](CONTRIBUTING.md)** — adding a language or a provider adapter is a great first PR
 - 🔒 **[Security policy](SECURITY.md)** — responsible disclosure + the honest threat model
 - 📜 **[Changelog](CHANGELOG.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**

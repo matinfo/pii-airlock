@@ -217,10 +217,15 @@ def download_models(
         typer.echo("No models configured.", err=True)
         raise typer.Exit(code=1)
 
-    # pipx and other pip-less envs can't install via `spacy download`; guide instead.
+    # pipx and other pip-less envs can't install via `spacy download`; guide only
+    # for models that are missing in the current interpreter.
     if not _has_pip():
-        _inject_hint(models)
-        raise typer.Exit(code=1)
+        missing = [model for model in models if not _model_installed(model)]
+        if missing:
+            _inject_hint(missing)
+            raise typer.Exit(code=1)
+        typer.echo("Done.", err=True)
+        return
 
     failed: list[str] = []
     for model in models:

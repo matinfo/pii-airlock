@@ -30,12 +30,8 @@ def test_download_models_pipless_prints_pipx_inject_and_exits(monkeypatch):
         cli, "_build_config", lambda lang, threshold: _fake_config({"en": "en_model"})
     )
     monkeypatch.setattr(cli, "_has_pip", lambda: False)
+    monkeypatch.setattr(cli, "_model_installed", lambda model: False)
     monkeypatch.setattr(cli, "_spacy_wheel_url", lambda model: f"https://example.test/{model}.whl")
-    monkeypatch.setattr(
-        cli.subprocess,
-        "call",
-        lambda args: (_ for _ in ()).throw(AssertionError("subprocess.call should not run")),
-    )
 
     with pytest.raises(cli.typer.Exit) as exc:
         cli.download_models(None)
@@ -44,6 +40,22 @@ def test_download_models_pipless_prints_pipx_inject_and_exits(monkeypatch):
     rendered = "\n".join(text for text, _ in out)
     assert "has no pip" in rendered
     assert 'pipx inject pii-airlock "https://example.test/en_model.whl"' in rendered
+
+
+def test_download_models_pipless_succeeds_if_models_already_installed(monkeypatch):
+    out = _capture_echo(monkeypatch)
+    monkeypatch.setattr(
+        cli, "_build_config", lambda lang, threshold: _fake_config({"en": "en_model"})
+    )
+    monkeypatch.setattr(cli, "_has_pip", lambda: False)
+    monkeypatch.setattr(cli, "_model_installed", lambda model: True)
+    monkeypatch.setattr(
+        cli, "_inject_hint", lambda models: (_ for _ in ()).throw(AssertionError("should not hint"))
+    )
+
+    cli.download_models(None)
+
+    assert out[-1][0] == "Done."
 
 
 def test_download_models_with_pip_downloads_and_succeeds(monkeypatch):
