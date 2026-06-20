@@ -16,16 +16,22 @@ from typing import Any
 
 import yaml
 
-_DEFAULT_FILE = Path(__file__).resolve().parent.parent / "config.default.yaml"
+# Shipped inside the package so it is always found, however pii-scrub is installed.
+_DEFAULT_FILE = Path(__file__).resolve().parent / "config.default.yaml"
 _CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 _USER_FILE = _CONFIG_HOME / "pii-scrub" / "config.yaml"
 _PROJECT_FILE = Path.cwd() / ".pii-scrub.yaml"
+
+# Built-in defaults. These make pii-scrub work even if no config file is found,
+# so an install can never end up with an empty model map. The bundled
+# config.default.yaml mirrors these for users to copy and override.
+_DEFAULT_MODELS = {"en": "en_core_web_lg", "fr": "fr_core_news_lg"}
 
 
 @dataclass(frozen=True)
 class Config:
     languages: list[str] = field(default_factory=lambda: ["en", "fr"])
-    models: dict[str, str] = field(default_factory=dict)
+    models: dict[str, str] = field(default_factory=lambda: dict(_DEFAULT_MODELS))
     score_threshold: float = 0.5
     entities: list[str] = field(default_factory=list)
     hook_decision: str = "ask"

@@ -1,11 +1,22 @@
 # pii-scrub
 
-Local, **reversible** PII anonymizer built on [Microsoft Presidio](https://microsoft.github.io/presidio/).  
-Keep real personal data off LLM round-trips — replace it with stable placeholder tokens, send the scrubbed text to the model, then swap the originals back in from a local mapping file.
+> **Keep real personal data out of your AI tools — locally, reversibly, with any provider.**
+
+[![CI](https://github.com/matinfo/pii-scrub/actions/workflows/ci.yml/badge.svg)](https://github.com/matinfo/pii-scrub/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/pii-scrub.svg)](https://pypi.org/project/pii-scrub/)
+![Python](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg)
+![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+
+**[Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [Claude Code](#claude-code-hooks) · [All agents →](AGENTS.md) · [Security](#-security-the-mapping-file-holds-real-pii)**
+
+Local, **reversible** PII anonymizer built on [Microsoft Presidio](https://microsoft.github.io/presidio/).
+Replace real personal data with stable placeholder tokens, send the scrubbed text to the model, then swap the originals back in from a local mapping file.
 
 **Detection and substitution run entirely on your machine.** The CLI pipe and the Claude Code hooks send nothing anywhere. The optional gateway *does* forward traffic to the provider you point it at — but only **after** PII has been replaced with tokens. Real personal data never reaches the provider.
 
-Runs on **macOS, Linux and Windows**, Python ≥ 3.10.
+Runs on **macOS, Linux and Windows**, Python ≥ 3.10. Detects English + French out of the box, [any spaCy language](#adding-a-language) via config.
 
 ---
 
@@ -24,13 +35,17 @@ All three share one detection engine — provider knowledge lives only in small 
 ## Install
 
 Requires Python ≥ 3.10 and [pipx](https://pipx.pypa.io/) (recommended) or pip.
+Works the same on macOS, Linux and Windows.
+
+```bash
+pipx install pii-scrub          # or: pip install pii-scrub
+pii-scrub download-models       # one-time: fetch the NLP models (en + fr)
+```
+
+Latest from source (before a release lands on PyPI):
 
 ```bash
 pipx install git+https://github.com/matinfo/pii-scrub
-# or: pip install git+https://github.com/matinfo/pii-scrub
-
-# Download the NLP models (en + fr by default)
-pii-scrub download-models
 ```
 
 Optional format support (plain text, CSV and JSON work out of the box):
@@ -278,6 +293,19 @@ echo "Call John Smith at john@example.com" | pii-scrub scrub --map /tmp/test.pii
 
 ---
 
+## Community
+
+- 🧩 **[Integrate with your agent](AGENTS.md)** — Claude Code, Cursor, Codex, Gemini, Continue, Aider, …
+- 🤝 **[Contributing](CONTRIBUTING.md)** — adding a language or a provider adapter is a great first PR
+- 🔒 **[Security policy](SECURITY.md)** — responsible disclosure + the honest threat model
+- 📜 **[Changelog](CHANGELOG.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
+
+If pii-scrub helps you keep PII out of your AI tools, a ⭐ helps others find it.
+
+[![Star History Chart](https://api.star-history.com/svg?repos=matinfo/pii-scrub&type=Date)](https://star-history.com/#matinfo/pii-scrub&Date)
+
+---
+
 ## License
 
-MIT
+[MIT](LICENSE) © pii-scrub contributors

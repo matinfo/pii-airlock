@@ -48,7 +48,9 @@ pii-scrub = "pii_scrub.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/matinfo/pii-scrub"
+Documentation = "https://github.com/matinfo/pii-scrub#readme"
 Issues = "https://github.com/matinfo/pii-scrub/issues"
+Changelog = "https://github.com/matinfo/pii-scrub/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pii_scrub", "hooks"]
