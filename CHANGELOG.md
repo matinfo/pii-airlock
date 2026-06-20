@@ -7,26 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **Renamed to `pii-airlock`** (`pii-scrub` was unavailable on PyPI). The PyPI
-  package, the CLI command, and the GitHub repository are now `pii-airlock`;
-  config lives at `~/.config/pii-airlock/` and `./.pii-airlock.yaml`. Only the
-  internal Python import package stays `pii_scrub` (invisible to users).
+## [0.2.1] - 2026-06-20
 
 ### Fixed
-- **Gateway robustness:** upstream connection/timeout failures now return a clean
-  `502` instead of a traceback; a missing spaCy model returns `503` and **never
-  forwards the request** (no PII leak on failure); the raw query string is
-  forwarded so multi-value params and Gemini's `?key=` are preserved exactly.
-- **Packaging:** `config.default.yaml` is now shipped inside the package and the
-  built-in `Config` carries default model mappings. Previously a non-editable
-  install (PyPI / `pipx`) could load an empty model map and fail with "No spaCy
-  models configured". Now a fresh install works out of the box.
-
-### Added
-- Community layer: README badges, `AGENTS.md` (per-agent integration matrix),
-  `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, issue/PR
-  templates, Dependabot, and a PyPI trusted-publishing release workflow.
+- **pipx compatibility:** added an explicit `click>=8.0` runtime dependency so
+  `pii-airlock download-models` no longer fails in isolated installs with
+  `ModuleNotFoundError: click`.
+- **Model installer reliability:** `download-models` now detects pip-less
+  interpreters (common with `pipx`) and prints exact `pipx inject` commands for
+  each model wheel instead of running a no-op install path.
+- **Model install verification:** after each `spacy download`, installation is
+  now verified in a fresh interpreter. If verification fails, the command exits
+  non-zero and prints direct wheel-install fallback commands.
 
 ## [0.2.0] - 2026-06-20
 
@@ -65,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-hook`.
 - Config override chain: bundled defaults → user → project → CLI flags.
 
-[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/matinfo/pii-airlock/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/matinfo/pii-airlock/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/matinfo/pii-airlock/releases/tag/v0.1.0

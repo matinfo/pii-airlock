@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -149,6 +150,62 @@ def detect(
         typer.echo(f"{d.entity_type:<16} {d.score:.2f}  [{d.start}:{d.end}]  {snippet!r}")
 
 
+def _has_pip() -> bool:
+    """Whether this interpreter can install packages with pip.
+
+    pipx venvs ship without pip, so `spacy download` (which shells out to pip)
+    cannot install a model into them.
+    """
+    return importlib.util.find_spec("pip") is not None
+
+
+def _model_installed(model: str) -> bool:
+    """Check, in a fresh interpreter, whether `model` is importable.
+
+    A subprocess avoids stale import caches right after an install attempt.
+    """
+    code = f"import importlib.util, sys; sys.exit(0 if importlib.util.find_spec({model!r}) else 1)"
+    return subprocess.call([sys.executable, "-c", code]) == 0
+
+
+def _spacy_wheel_url(model: str) -> str | None:
+    """Best-effort resolve the direct wheel URL for a spaCy model.
+
+    Never raises: returns None if spaCy's compatibility table can't be reached
+    or its internals changed, so callers can fall back to generic guidance.
+    """
+    try:
+        from spacy.cli.download import get_compatibility, get_version
+
+        version = get_version(model, get_compatibility())
+        return (
+            "https://github.com/explosion/spacy-models/releases/download/"
+            f"{model}-{version}/{model}-{version}-py3-none-any.whl"
+        )
+    except Exception:
+        return None
+
+
+def _inject_hint(models: list[str]) -> None:
+    """Print exact commands to install models into a pip-less (e.g. pipx) env."""
+    typer.echo(
+        "This interpreter has no pip (typical for a pipx install), so spaCy "
+        "models can't be downloaded the usual way.\nInstall each model directly "
+        "— for a pipx install, use:",
+        err=True,
+    )
+    for model in models:
+        url = _spacy_wheel_url(model)
+        if url:
+            typer.echo(f'  pipx inject pii-airlock "{url}"', err=True)
+        else:
+            typer.echo(
+                f"  pipx inject pii-airlock  # wheel for {model}: "
+                "https://github.com/explosion/spacy-models/releases",
+                err=True,
+            )
+
+
 @app.command("download-models")
 def download_models(
     lang: str | None = typer.Option(None, "--lang", help="Languages, e.g. 'fr,en'."),
@@ -159,12 +216,27 @@ def download_models(
     if not models:
         typer.echo("No models configured.", err=True)
         raise typer.Exit(code=1)
+
+    # pipx and other pip-less envs can't install via `spacy download`; guide instead.
+    if not _has_pip():
+        _inject_hint(models)
+        raise typer.Exit(code=1)
+
+    failed: list[str] = []
     for model in models:
         typer.echo(f"Downloading {model} ...", err=True)
         rc = subprocess.call([sys.executable, "-m", "spacy", "download", model])
-        if rc != 0:
-            typer.echo(f"Failed to download {model}", err=True)
-            raise typer.Exit(code=rc)
+        # Verify: some installers report success without placing the model here.
+        if rc != 0 or not _model_installed(model):
+            failed.append(model)
+
+    if failed:
+        typer.echo(f"Failed to install: {', '.join(failed)}", err=True)
+        for model in failed:
+            url = _spacy_wheel_url(model)
+            if url:
+                typer.echo(f'  Try:  {sys.executable} -m pip install "{url}"', err=True)
+        raise typer.Exit(code=1)
     typer.echo("Done.", err=True)
 
 

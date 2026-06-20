@@ -38,8 +38,8 @@ Requires Python ≥ 3.10 and [pipx](https://pipx.pypa.io/) (recommended) or pip.
 Works the same on macOS, Linux and Windows.
 
 ```bash
-pipx install pii-airlock          # or: pip install pii-airlock
-pii-airlock download-models       # one-time: fetch the NLP models (en + fr)
+pipx install "pii-airlock[proxy]" # gateway-ready install (recommended)
+pii-airlock download-models       # one-time: fetch NLP models (en + fr)
 ```
 
 Latest from source (before a release lands on PyPI):
@@ -57,6 +57,10 @@ pipx inject pii-airlock 'pii-airlock[pdf]'    # PDF (text extraction)
 pipx inject pii-airlock 'pii-airlock[all]'    # everything
 ```
 
+If `download-models` reports that your interpreter has no `pip` (common in
+`pipx`), run the printed `pipx inject pii-airlock "<model-wheel-url>"` commands.
+The command now prints exact model wheel URLs for you.
+
 ---
 
 ## Universal gateway (any provider)
@@ -71,7 +75,8 @@ values in the responses — including streamed ones. The client never sees the d
 ```
 
 ```bash
-pipx inject pii-airlock 'pii-airlock[proxy]'
+# already included if you installed with "pii-airlock[proxy]"
+# pipx inject pii-airlock 'pii-airlock[proxy]'
 pii-airlock proxy            # listens on http://127.0.0.1:8745
 ```
 

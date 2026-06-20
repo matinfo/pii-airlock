@@ -12,9 +12,24 @@ already use. There are two integration styles:
 Start the gateway once:
 
 ```bash
-pipx inject pii-airlock 'pii-airlock[proxy]'
+pipx install "pii-airlock[proxy]"
 pii-airlock proxy            # http://127.0.0.1:8745  (127.0.0.1 only by default)
 ```
+
+If you're already installed without extras, add gateway deps with:
+
+```bash
+pipx inject pii-airlock 'pii-airlock[proxy]'
+```
+
+Install spaCy models once:
+
+```bash
+pii-airlock download-models
+```
+
+If your pipx environment is pip-less, `download-models` prints exact
+`pipx inject pii-airlock "<model-wheel-url>"` commands for each model.
 
 ---
 
