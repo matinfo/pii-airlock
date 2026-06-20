@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Gateway robustness:** upstream connection/timeout failures now return a clean
+  `502` instead of a traceback; a missing spaCy model returns `503` and **never
+  forwards the request** (no PII leak on failure); the raw query string is
+  forwarded so multi-value params and Gemini's `?key=` are preserved exactly.
 - **Packaging:** `config.default.yaml` is now shipped inside the package and the
   built-in `Config` carries default model mappings. Previously a non-editable
   install (PyPI / `pipx`) could load an empty model map and fail with "No spaCy

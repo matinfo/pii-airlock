@@ -102,25 +102,39 @@ def build_app(
 
         # --- scrub outbound (generation endpoints with a JSON body only) ---
         mapping = _new_mapping()
-        scrub_this = _is_generation_endpoint(adapter, path) and body
+        scrub_this = _is_generation_endpoint(adapter, path) and bool(body)
         if scrub_this:
             try:
                 payload = json.loads(body)
             except ValueError:
                 scrub_this = False
             else:
-                scrubbed = await run_in_threadpool(
-                    scrub_payload, payload, adapter,
-                    lambda t: engine.scrub(t, mapping, language),
-                )
+                try:
+                    scrubbed = await run_in_threadpool(
+                        scrub_payload, payload, adapter,
+                        lambda t: engine.scrub(t, mapping, language),
+                    )
+                except RuntimeError as exc:
+                    # e.g. spaCy model not installed — fail loud, don't leak by
+                    # silently forwarding the original PII.
+                    return Response(
+                        f"pii-scrub: cannot scrub request — {exc}\n"
+                        "Run `pii-scrub download-models`.",
+                        status_code=503,
+                    )
                 body = json.dumps(scrubbed, ensure_ascii=False).encode("utf-8")
 
+        # Forward the raw query string so multi-value params (and Gemini's ?key=)
+        # are preserved exactly.
         url = f"{upstream.rstrip('/')}/{path}"
         upstream_req = client.build_request(
             request.method, url,
-            params=request.query_params, headers=req_headers, content=body,
+            params=request.url.query or None, headers=req_headers, content=body,
         )
-        upstream_resp = await client.send(upstream_req, stream=True)
+        try:
+            upstream_resp = await client.send(upstream_req, stream=True)
+        except httpx.HTTPError as exc:
+            return Response(f"pii-scrub: upstream request failed — {exc}", status_code=502)
 
         resp_headers = {
             k: v for k, v in upstream_resp.headers.items()
