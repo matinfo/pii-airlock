@@ -46,5 +46,6 @@ def _walk(obj: Any, scrub: Scrubber) -> Any:
     if isinstance(obj, list):
         return [_walk(x, scrub) for x in obj]
     if isinstance(obj, dict):
-        return {k: _walk(v, scrub) for k, v in obj.items()}
+        # Keys too: emails / names used as keys are common in exports.
+        return {scrub(k): _walk(v, scrub) for k, v in obj.items()}
     return obj

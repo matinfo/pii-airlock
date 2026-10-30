@@ -42,7 +42,10 @@ all = [
     "starlette>=0.37",
     "uvicorn>=0.30",
 ]
-dev = ["pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "starlette>=0.37", "uvicorn>=0.30"]
+dev = [
+    "pytest>=8.0", "ruff>=0.5", "httpx>=0.27", "starlette>=0.37", "uvicorn>=0.30",
+    "python-docx>=1.0",
+]
 
 [project.scripts]
 pii-airlock = "pii_scrub.cli:app"

@@ -42,3 +42,38 @@ def test_json_handler_walks_strings_only():
     assert out["name"] == "<PERSON_1>"
     assert out["age"] == 30  # numbers untouched
     assert out["tags"] == ["<PERSON_1>", "x"]
+
+
+def test_json_handler_scrubs_keys():
+    raw = json.dumps({"Jean": {"role": "admin"}})
+    out = json.loads(JsonHandler(raw).scrub(fake_scrub))
+    assert out == {"<PERSON_1>": {"role": "admin"}}
+
+
+def test_docx_handler_covers_headers_tables_hyperlinks_and_metadata():
+    import io
+
+    import pytest
+
+    docx = pytest.importorskip("docx")
+    from pii_scrub.formats.docx import DocxHandler
+
+    doc = docx.Document()
+    para = doc.add_paragraph("Dear ")
+    para.add_run("Je")
+    para.add_run("an,")  # entity split across runs
+    doc.add_table(rows=1, cols=1).cell(0, 0).text = "Jean in table"
+    doc.sections[0].header.paragraphs[0].text = "Header Jean"
+    doc.sections[0].footer.paragraphs[0].text = "Footer Jean"
+    doc.core_properties.author = "Jean Author"
+    doc.core_properties.title = "Notes about Jean"
+    buf = io.BytesIO()
+    doc.save(buf)
+
+    out = docx.Document(io.BytesIO(DocxHandler(buf.getvalue()).scrub(fake_scrub)))
+    assert out.paragraphs[0].text == "Dear <PERSON_1>,"
+    assert out.tables[0].cell(0, 0).text == "<PERSON_1> in table"
+    assert out.sections[0].header.paragraphs[0].text == "Header <PERSON_1>"
+    assert out.sections[0].footer.paragraphs[0].text == "Footer <PERSON_1>"
+    assert out.core_properties.author == ""
+    assert out.core_properties.title == "Notes about <PERSON_1>"
