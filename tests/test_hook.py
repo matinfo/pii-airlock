@@ -3,7 +3,7 @@
 import io
 import json
 
-import hooks._common as common
+import pii_scrub.hooks._common as common
 from pii_scrub.config import Config
 from pii_scrub.engine import Detection
 

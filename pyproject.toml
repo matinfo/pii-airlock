@@ -57,7 +57,7 @@ Issues = "https://github.com/matinfo/pii-airlock/issues"
 Changelog = "https://github.com/matinfo/pii-airlock/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pii_scrub", "hooks"]
+packages = ["pii_scrub"]
 
 [tool.ruff]
 line-length = 100

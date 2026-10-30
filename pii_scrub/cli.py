@@ -435,7 +435,7 @@ def install_hook(
 @hook_app.command("pre-tool-use")
 def hook_pre_tool_use() -> None:
     """PreToolUse hook entry point (reads event JSON from stdin)."""
-    from hooks._common import run_pre_tool_use
+    from .hooks._common import run_pre_tool_use
 
     run_pre_tool_use()
 
@@ -443,7 +443,7 @@ def hook_pre_tool_use() -> None:
 @hook_app.command("user-prompt-submit")
 def hook_user_prompt_submit() -> None:
     """UserPromptSubmit hook entry point (reads event JSON from stdin)."""
-    from hooks._common import run_user_prompt_submit
+    from .hooks._common import run_user_prompt_submit
 
     run_user_prompt_submit()
 
