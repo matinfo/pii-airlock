@@ -93,10 +93,9 @@ def scrub(
     raw = _read_input(file, handler_cls.reads_binary)
 
     mapping = Mapping()
-    language = config.languages[0]
 
     def _scrub_text(text: str) -> str:
-        return engine.scrub(text, mapping, language)
+        return engine.scrub(text, mapping)
 
     try:
         result = handler_cls(raw).scrub(_scrub_text)
@@ -142,7 +141,7 @@ def detect(
     text = _read_input(file, binary=False)
     assert isinstance(text, str)
 
-    detections = engine.detect(text, config.languages[0])
+    detections = engine.detect(text)
     if not detections:
         typer.echo("No PII detected.")
         raise typer.Exit()

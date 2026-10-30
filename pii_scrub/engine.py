@@ -53,31 +53,57 @@ class ScrubEngine:
                 "No spaCy models configured for languages "
                 f"{self.config.languages}. Check `models:` in your config."
             )
+        missing = [m["model_name"] for m in models if not _model_available(m["model_name"])]
+        if missing:
+            # Fail here: Presidio would otherwise try to download the model, and
+            # spaCy's downloader prints to stdout and calls sys.exit().
+            raise RuntimeError(
+                f"spaCy model(s) not installed: {', '.join(missing)}. "
+                "Run `pii-airlock download-models`."
+            )
+        languages = [m["lang_code"] for m in models]
         provider = NlpEngineProvider(
             nlp_configuration={"nlp_engine_name": "spacy", "models": models}
         )
         nlp_engine = provider.create_engine()
         return AnalyzerEngine(
             nlp_engine=nlp_engine,
-            supported_languages=[m["lang_code"] for m in models],
+            registry=_build_registry(languages, nlp_engine),
+            supported_languages=languages,
         )
+
+    @property
+    def languages(self) -> list[str]:
+        """Configured languages that have a spaCy model."""
+        return [lang for lang in self.config.languages if lang in self.config.models]
 
     # --- public API -------------------------------------------------------
 
     def detect(self, text: str, language: str | None = None) -> list[Detection]:
-        """Return PII detections above the configured score threshold."""
+        """Return PII detections above the configured score threshold.
+
+        With no `language`, every configured language is analyzed and the
+        results are unioned: mixed EN/FR text is common and a single-language
+        pass silently misses names in the other language.
+        """
         if not text.strip():
             return []
-        lang = language or self.config.languages[0]
+        langs = [language] if language else (self.languages or self.config.languages[:1])
         entities = self.config.entities or None
+        results = []
         # The lock also guards the first lazy build of _analyzer.
         with self._lock:
-            results = self._analyzer.analyze(text=text, language=lang, entities=entities)
-        return [
-            Detection(r.entity_type, r.start, r.end, r.score)
-            for r in results
-            if r.score >= self.config.score_threshold
-        ]
+            for lang in langs:
+                results.extend(
+                    self._analyzer.analyze(text=text, language=lang, entities=entities)
+                )
+        # Pattern recognizers run once per language: collapse identical spans.
+        best: dict[tuple[str, int, int], float] = {}
+        for r in results:
+            if r.score >= self.config.score_threshold:
+                key = (r.entity_type, r.start, r.end)
+                best[key] = max(r.score, best.get(key, 0.0))
+        return [Detection(t, s, e, score) for (t, s, e), score in best.items()]
 
     def scrub(
         self,
@@ -90,13 +116,45 @@ class ScrubEngine:
         Overlapping detections are de-duplicated (highest score wins); spans are
         replaced right-to-left so earlier offsets stay valid.
         """
-        detections = self.detect(text, language)
-        detections = _dedupe_overlaps(detections)
-        out = text
-        for d in sorted(detections, key=lambda x: x.start, reverse=True):
-            token = mapping.token_for(d.entity_type, text[d.start : d.end])
-            out = out[: d.start] + token + out[d.end :]
-        return out
+        return apply_detections(text, self.detect(text, language), mapping)
+
+
+def apply_detections(text: str, detections: list[Detection], mapping: Mapping) -> str:
+    """Replace `detections` in `text` with tokens from `mapping`."""
+    out = text
+    for d in sorted(_dedupe_overlaps(detections), key=lambda x: x.start, reverse=True):
+        token = mapping.token_for(d.entity_type, text[d.start : d.end])
+        out = out[: d.start] + token + out[d.end :]
+    return out
+
+
+def _model_available(model: str) -> bool:
+    """Whether a spaCy model name (installed package) or path can be loaded."""
+    import importlib.util
+    from pathlib import Path
+
+    return importlib.util.find_spec(model) is not None or Path(model).is_dir()
+
+
+def _build_registry(languages: list[str], nlp_engine):
+    """Presidio registry with pattern recognizers for *every* configured language.
+
+    Presidio's bundled recognizer list defaults to English only, so a non-English
+    language would otherwise lose email/phone/IBAN/credit-card detection.
+    """
+    from presidio_analyzer import RecognizerRegistry
+    from presidio_analyzer.predefined_recognizers import CreditCardRecognizer
+
+    registry = RecognizerRegistry(supported_languages=languages)
+    registry.load_predefined_recognizers(languages=languages, nlp_engine=nlp_engine)
+    have_cc = {
+        r.supported_language for r in registry.recognizers
+        if isinstance(r, CreditCardRecognizer)
+    }
+    for lang in languages:
+        if lang not in have_cc:
+            registry.add_recognizer(CreditCardRecognizer(supported_language=lang))
+    return registry
 
 
 def _dedupe_overlaps(detections: list[Detection]) -> list[Detection]:
