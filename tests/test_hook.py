@@ -32,7 +32,7 @@ class BrokenEngine:
 
 def _run(fn, event, monkeypatch, capsys, engine=FakeEngine, **config):
     monkeypatch.setattr(common, "ScrubEngine", engine)
-    monkeypatch.setattr(common, "load_config", lambda: Config(**config))
+    monkeypatch.setattr(common, "load_config", lambda **_k: Config(**config))
     monkeypatch.setattr(common.sys, "stdin", io.StringIO(json.dumps(event)))
     fn()
     return capsys.readouterr().out
@@ -180,3 +180,39 @@ def test_pre_tool_use_system_exit_still_decides(monkeypatch, capsys):
                monkeypatch, capsys, engine=ExitingEngine)
     payload = json.loads(out)  # stdout is pure JSON
     assert payload["hookSpecificOutput"]["permissionDecision"] == "ask"
+
+
+def test_hooks_apply_policy_of_reported_project(tmp_path, monkeypatch, capsys):
+    """The SKILL.md policy of the project Claude Code reports in `cwd` applies."""
+    skill = tmp_path / ".claude" / "skills" / "pii-airlock" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("```yaml pii-airlock\nhook_decision: deny\n```\n", encoding="utf-8")
+    monkeypatch.setattr(common, "ScrubEngine", FakeEngine)
+    monkeypatch.chdir(tmp_path.parent)  # hook process runs elsewhere
+    event = {"tool_name": "Bash", "cwd": str(tmp_path),
+             "tool_input": {"command": "echo jean@acme.fr"}}
+    monkeypatch.setattr(common.sys, "stdin", io.StringIO(json.dumps(event)))
+    common.run_pre_tool_use()
+    hso = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    assert hso["permissionDecision"] == "deny"
+
+
+def test_hooks_invalid_policy_fails_closed(tmp_path, monkeypatch, capsys):
+    skill = tmp_path / ".claude" / "skills" / "pii-airlock" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("```yaml pii-airlock\nallow_list: [unclosed\n```\n", encoding="utf-8")
+    monkeypatch.setattr(common, "ScrubEngine", FakeEngine)
+
+    event = {"tool_name": "Bash", "cwd": str(tmp_path), "tool_input": {"command": "ls"}}
+    monkeypatch.setattr(common.sys, "stdin", io.StringIO(json.dumps(event)))
+    common.run_pre_tool_use()
+    hso = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    assert hso["permissionDecision"] == "ask"
+    assert "invalid YAML" in hso["permissionDecisionReason"]
+
+    monkeypatch.setattr(common.sys, "stdin",
+                        io.StringIO(json.dumps({"prompt": "hi", "cwd": str(tmp_path)})))
+    common.run_user_prompt_submit()
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["decision"] == "block"
+    assert "invalid YAML" in payload["reason"]

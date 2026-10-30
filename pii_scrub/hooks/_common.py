@@ -68,6 +68,18 @@ def _read_event() -> dict:
         return {}
 
 
+def _load_config(event: dict) -> tuple[Config, BaseException | None]:
+    """Config for the project Claude Code reports (its SKILL.md policy applies).
+
+    A broken config (e.g. invalid YAML in the policy block) must not crash the
+    hook — that would fail open. Fall back to defaults and report the error.
+    """
+    try:
+        return load_config(cwd=event.get("cwd") or None), None
+    except _FAILURES as exc:
+        return Config(), exc
+
+
 def _collect_strings(value) -> list[str]:
     """Flatten nested tool-input values into a list of strings."""
     if isinstance(value, str):
@@ -166,7 +178,7 @@ def _tool_texts(tool: str, tool_input: dict, event: dict, config: Config) -> lis
 
 def run_pre_tool_use() -> None:
     event = _read_event()
-    config = load_config()
+    config, config_error = _load_config(event)
     tool = event.get("tool_name", "") or ""
     tool_input = event.get("tool_input", {}) or {}
     decision = "deny" if config.hook_decision == "deny" else "ask"
@@ -174,6 +186,8 @@ def run_pre_tool_use() -> None:
     try:
         with _quiet():
             texts = _tool_texts(tool, tool_input, event, config)
+            if texts is not None and config_error is not None:
+                raise config_error
             if texts is None:
                 return  # tool not relevant; no decision -> allow
             found = _detect_types(ScrubEngine(config), texts)
@@ -201,12 +215,14 @@ def run_pre_tool_use() -> None:
 
 def run_user_prompt_submit() -> None:
     event = _read_event()
-    config = load_config()
+    config, config_error = _load_config(event)
     prompt = event.get("prompt", "") or ""
     block = config.prompt_decision != "warn" or config.hook_decision == "deny"
 
     try:
         with _quiet():
+            if config_error is not None:
+                raise config_error
             engine = ScrubEngine(config)
             if len(prompt) <= _CHUNK_CHARS:
                 detections = engine.detect(prompt)
