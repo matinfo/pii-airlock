@@ -465,7 +465,9 @@ ruff check .
 pytest -q
 ```
 
-Unit tests stub out Presidio/spaCy and run entirely offline. For a live end-to-end check, run `pii-airlock download-models` first, then:
+Unit tests stub out Presidio/spaCy and run entirely offline. Detection quality is measured separately on a labeled EN+FR corpus (fake data) with the real small models: `python -m tests.eval.run_eval -v` prints per-entity recall/precision, `--gate` fails below `tests/eval/thresholds.json` (also `pytest -m eval`). Add a case to `tests/eval/corpus.jsonl` when you fix a miss.
+
+ For a live end-to-end check, run `pii-airlock download-models` first, then:
 
 ```bash
 echo "Call John Smith at john@example.com" | pii-airlock scrub --map /tmp/test.pii-map.json

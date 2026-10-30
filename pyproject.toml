@@ -69,3 +69,5 @@ ignore = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not eval'"
+markers = ["eval: detection-quality gate; needs the small spaCy models (pytest -m eval)"]

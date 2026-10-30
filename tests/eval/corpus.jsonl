@@ -1,0 +1,37 @@
+{"id":"en-person-email","lang":"en","text":"Please forward the contract to Sarah Johnson at sarah.johnson@example.com before Friday.","pii":[["PERSON","Sarah Johnson"],["EMAIL_ADDRESS","sarah.johnson@example.com"]]}
+{"id":"en-person-phone","lang":"en","text":"Michael Brown called from +44 20 7946 0958 about the invoice.","pii":[["PERSON","Michael Brown"],["PHONE_NUMBER","+44 20 7946 0958"]]}
+{"id":"en-person-repeat","lang":"en","text":"David Miller joined the call. Later, Miller asked for the report and David agreed to send it.","pii":[["PERSON","David Miller"],["PERSON","Miller"],["PERSON","David"]]}
+{"id":"en-iban-card","lang":"en","text":"Refund to IBAN GB82 WEST 1234 5698 7654 32 or card 4111 1111 1111 1111.","pii":[["IBAN_CODE","GB82 WEST 1234 5698 7654 32"],["CREDIT_CARD","4111 1111 1111 1111"]]}
+{"id":"en-ip","lang":"en","text":"The login came from 203.0.113.42 at night, not from the office network.","pii":[["IP_ADDRESS","203.0.113.42"]]}
+{"id":"en-support-ticket","lang":"en","text":"Ticket 4412: customer Emily Clark (emily.clark@mail.example.org) reports she cannot log in from London.","pii":[["PERSON","Emily Clark"],["EMAIL_ADDRESS","emily.clark@mail.example.org"],["LOCATION","London"]]}
+{"id":"en-meeting","lang":"en","text":"Robert Wilson and Linda Martinez will meet the client in New York next week.","pii":[["PERSON","Robert Wilson"],["PERSON","Linda Martinez"],["LOCATION","New York"]]}
+{"id":"en-two-emails","lang":"en","text":"Reach us at support@acme-corp.io or sales@acme-corp.io.","pii":[["EMAIL_ADDRESS","support@acme-corp.io"],["EMAIL_ADDRESS","sales@acme-corp.io"]]}
+{"id":"en-aws-key","lang":"en","text":"export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE and run the deploy script.","pii":[["SECRET","AKIAIOSFODNN7EXAMPLE"]]}
+{"id":"en-github-token","lang":"en","text":"Use token ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789 to clone the private repo.","pii":[["SECRET","ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789"]]}
+{"id":"en-password-assign","lang":"en","text":"In the config set password=Tr0ub4dor&3xyz for the staging database.","pii":[["SECRET","Tr0ub4dor&3xyz"]]}
+{"id":"en-db-url","lang":"en","text":"DATABASE_URL=postgres://admin:s3cr3tPassw0rd@db.internal:5432/app","pii":[["SECRET","s3cr3tPassw0rd"]]}
+{"id":"en-private-key","lang":"en","text":"Key:\n-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAfakefakefakefake\n-----END RSA PRIVATE KEY-----\nDo not share.","pii":[["SECRET","-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAfakefakefakefake\n-----END RSA PRIVATE KEY-----"]]}
+{"id":"en-email-in-code","lang":"en","text":"user = User(name=\"Karen White\", email=\"karen.white@example.net\")","pii":[["PERSON","Karen White"],["EMAIL_ADDRESS","karen.white@example.net"]]}
+{"id":"en-clean-code","lang":"en","text":"def add(a, b):\n    return a + b\n\nprint(add(2, 3))  # prints 5","pii":[]}
+{"id":"en-clean-git","lang":"en","text":"Run git rebase main, fix the conflicts in src/app.py and push with --force-with-lease.","pii":[]}
+{"id":"en-clean-prose","lang":"en","text":"The quarterly report shows revenue growth of twelve percent, driven by strong demand.","pii":[]}
+{"id":"en-clean-version","lang":"en","text":"Upgrade to version 2.4.1, then restart the service on port 8080.","pii":[]}
+{"id":"fr-person-email","lang":"fr","text":"Merci d'envoyer le contrat à Marie Dubois à l'adresse marie.dubois@exemple.fr avant vendredi.","pii":[["PERSON","Marie Dubois"],["EMAIL_ADDRESS","marie.dubois@exemple.fr"]]}
+{"id":"fr-person-phone","lang":"fr","text":"Pierre Martin a appelé depuis le 06 12 34 56 78 au sujet de la facture.","pii":[["PERSON","Pierre Martin"],["PHONE_NUMBER","06 12 34 56 78"]]}
+{"id":"fr-phone-intl","lang":"fr","text":"Vous pouvez joindre le service au +33 1 23 45 67 89 du lundi au vendredi.","pii":[["PHONE_NUMBER","+33 1 23 45 67 89"]]}
+{"id":"fr-person-repeat","lang":"fr","text":"Jean Dupont a rejoint la réunion. Plus tard, M. Dupont a demandé le rapport et Jean a accepté de l'envoyer.","pii":[["PERSON","Jean Dupont"],["PERSON","Dupont"],["PERSON","Jean"]]}
+{"id":"fr-iban","lang":"fr","text":"Virement sur l'IBAN FR76 3000 6000 0112 3456 7890 189 avant la fin du mois.","pii":[["IBAN_CODE","FR76 3000 6000 0112 3456 7890 189"]]}
+{"id":"fr-nir","lang":"fr","text":"Numéro de sécurité sociale : 1 85 05 78 006 084 91.","pii":[["FR_NIR","1 85 05 78 006 084 91"]]}
+{"id":"fr-nir-compact","lang":"fr","text":"Le NIR du patient est 185057800608491 dans le dossier.","pii":[["FR_NIR","185057800608491"]]}
+{"id":"fr-siret","lang":"fr","text":"L'entreprise est enregistrée sous le SIRET 732 829 320 00074 à Lyon.","pii":[["FR_SIRET","732 829 320 00074"],["LOCATION","Lyon"]]}
+{"id":"fr-siren","lang":"fr","text":"Facture émise par la société, SIREN : 732829320, TVA incluse.","pii":[["FR_SIREN","732829320"]]}
+{"id":"fr-ch-ahv","lang":"fr","text":"Numéro AVS de l'employé : 756.9217.0769.85, à saisir dans le formulaire.","pii":[["CH_AHV","756.9217.0769.85"]]}
+{"id":"fr-ch-phone","lang":"fr","text":"Appelez Claire Favre au 079 123 45 67 pour confirmer le rendez-vous à Genève.","pii":[["PERSON","Claire Favre"],["PHONE_NUMBER","079 123 45 67"],["LOCATION","Genève"]]}
+{"id":"fr-ch-iban","lang":"fr","text":"Paiement sur le compte CH93 0076 2011 6238 5295 7 au nom de la fondation.","pii":[["IBAN_CODE","CH93 0076 2011 6238 5295 7"]]}
+{"id":"fr-meeting","lang":"fr","text":"Sophie Laurent et Thomas Bernard rencontreront le client à Paris la semaine prochaine.","pii":[["PERSON","Sophie Laurent"],["PERSON","Thomas Bernard"],["LOCATION","Paris"]]}
+{"id":"fr-ticket","lang":"fr","text":"Ticket 8821 : la cliente Camille Moreau (camille.moreau@courrier.example.fr) ne peut plus se connecter depuis Marseille.","pii":[["PERSON","Camille Moreau"],["EMAIL_ADDRESS","camille.moreau@courrier.example.fr"],["LOCATION","Marseille"]]}
+{"id":"fr-password","lang":"fr","text":"Dans le fichier de config, mets mot de passe puis password: Xk9#mP2vLq8z pour la base de test.","pii":[["SECRET","Xk9#mP2vLq8z"]]}
+{"id":"fr-clean-prose","lang":"fr","text":"Le rapport trimestriel montre une croissance de douze pour cent grâce à une forte demande.","pii":[]}
+{"id":"fr-clean-code","lang":"fr","text":"Lance git rebase main puis corrige les conflits dans src/app.py avant de pousser.","pii":[]}
+{"id":"fr-clean-version","lang":"fr","text":"Passe à la version 2.4.1 puis redémarre le service sur le port 8080.","pii":[]}
+{"id":"mixed-en-fr","lang":"fr","text":"Please ask Luc Girard (luc.girard@exemple.fr) de valider le document avant demain.","pii":[["PERSON","Luc Girard"],["EMAIL_ADDRESS","luc.girard@exemple.fr"]]}

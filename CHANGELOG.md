@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- Detection eval harness (`tests/eval`): labeled EN+FR corpus of fake PII, per-entity
+  recall / precision / leak-free report (`python -m tests.eval.run_eval -v`) and a CI job
+  that fails below `thresholds.json`.
 - Built-in recognizers (regex + checksum, every language): French NIR, Swiss AHV/AVS,
   SIRET/SIREN, FR/CH national phone formats, and secrets (cloud/API keys, JWTs,
   private keys, URL and assignment passwords). `builtin_recognizers: false` disables.
