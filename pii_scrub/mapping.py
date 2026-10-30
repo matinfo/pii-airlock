@@ -18,35 +18,59 @@ from pathlib import Path
 # Matches any token this module mints, e.g. <PERSON_1>, <EMAIL_ADDRESS_12>.
 TOKEN_RE = re.compile(r"<([A-Z][A-Z0-9_]*)_(\d+)>")
 
+# Tokens as models actually echo them back: raw, HTML-escaped (&lt;PERSON_1&gt;),
+# Markdown-escaped (\<PERSON_1\>) or JSON-unicode-escaped (\u003cPERSON_1\u003e).
+ANY_TOKEN_RE = re.compile(
+    r"(?:<|&lt;|\\<|\\u003[cC])([A-Z][A-Z0-9_]*_\d+)(?:>|&gt;|\\>|\\u003[eE])"
+)
+
 
 class Mapping:
     """Bidirectional, deterministic store of value <-> token pairs."""
 
     def __init__(self) -> None:
-        # (entity_type, value) -> token
-        self._value_to_token: dict[tuple[str, str], str] = {}
+        # value -> token. Keyed by value alone: the same string tagged PERSON in
+        # one place and LOCATION in another must get one token, or the model
+        # loses the link between the two mentions.
+        self._value_to_token: dict[str, str] = {}
         # token -> value
         self._token_to_value: dict[str, str] = {}
         # entity_type -> highest index used
         self._counters: dict[str, int] = {}
+        # token strings already present in source text; never minted
+        self._reserved: set[str] = set()
+
+    def reserve(self, text: str) -> None:
+        """Never mint tokens that already appear literally in `text`.
+
+        Otherwise a literal ``<PERSON_1>`` in the input (an earlier scrub, a
+        template) would be "restored" to someone's real name.
+        """
+        self._reserved.update(f"<{m.group(1)}>" for m in ANY_TOKEN_RE.finditer(text))
 
     def token_for(self, entity_type: str, value: str) -> str:
         """Return the existing token for this value, or mint the next one."""
-        key = (entity_type, value)
-        existing = self._value_to_token.get(key)
+        existing = self._value_to_token.get(value)
         if existing is not None:
             return existing
-        idx = self._counters.get(entity_type, 0) + 1
+        idx = self._counters.get(entity_type, 0)
+        while True:
+            idx += 1
+            token = f"<{entity_type}_{idx}>"
+            if token not in self._reserved:
+                break
         self._counters[entity_type] = idx
-        token = f"<{entity_type}_{idx}>"
-        self._value_to_token[key] = token
+        self._value_to_token[value] = token
         self._token_to_value[token] = value
         return token
 
     def restore(self, text: str) -> str:
-        """Replace every known token in `text` with its original value."""
-        return TOKEN_RE.sub(
-            lambda m: self._token_to_value.get(m.group(0), m.group(0)),
+        """Replace every known token in `text` with its original value.
+
+        Tolerates the escaped forms models produce (see ``ANY_TOKEN_RE``).
+        """
+        return ANY_TOKEN_RE.sub(
+            lambda m: self._token_to_value.get(f"<{m.group(1)}>", m.group(0)),
             text,
         )
 
@@ -88,7 +112,5 @@ class Mapping:
         m._token_to_value = dict(data.get("tokens", {}))
         m._counters = dict(data.get("counters", {}))
         for token, value in m._token_to_value.items():
-            match = TOKEN_RE.fullmatch(token)
-            if match:
-                m._value_to_token[(match.group(1), value)] = token
+            m._value_to_token.setdefault(value, token)
         return m

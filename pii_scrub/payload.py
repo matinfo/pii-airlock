@@ -17,7 +17,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from .mapping import TOKEN_RE
+from .mapping import ANY_TOKEN_RE
 
 Transform = Callable[[str], str]
 
@@ -68,11 +68,13 @@ def json_escaped(restore: Transform) -> Transform:
     backslash cannot break a tool-call ``arguments`` string.
     """
     def _sub(match: re.Match) -> str:
-        token = match.group(0)
+        token = f"<{match.group(1)}>"
         value = restore(token)
-        return token if value == token else json.dumps(value, ensure_ascii=False)[1:-1]
+        if value == token:
+            return match.group(0)
+        return json.dumps(value, ensure_ascii=False)[1:-1]
 
-    return lambda text: TOKEN_RE.sub(_sub, text)
+    return lambda text: ANY_TOKEN_RE.sub(_sub, text)
 
 
 def _restore_deep(value: Any, restore: Transform) -> Any:
@@ -184,8 +186,12 @@ class StreamRestorer:
     Call :meth:`flush` once at end of the text channel to release any remainder.
     """
 
-    # A trailing run that could still grow into a token: '<' + token-ish chars.
-    _PARTIAL = re.compile(r"<[A-Z0-9_]*$")
+    # A trailing run that could still grow into a token, in any form
+    # ANY_TOKEN_RE accepts: an opener (or its prefix) + token chars + a partial closer.
+    _PARTIAL = re.compile(
+        r"(?:(?:<|&lt;|\\<|\\u003[cC])[A-Z0-9_]*(?:&g?t?|\\(?:u0?0?3?)?)?"
+        r"|&l?t?|\\(?:u0?0?3?)?)$"
+    )
 
     def __init__(self, restore: Transform) -> None:
         self._restore = restore

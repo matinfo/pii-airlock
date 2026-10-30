@@ -362,3 +362,20 @@ def test_anthropic_stream_flush_inside_block_with_event_name():
     assert events[stop0 - 1][1] == {"type": "content_block_delta", "index": 0,
                                     "delta": {"type": "text_delta", "text": "<PER"}}
     assert names[-1] == "message_stop"
+
+
+def test_stream_restorer_escaped_token_split():
+    from pii_scrub.mapping import Mapping
+
+    m = Mapping()
+    m.token_for("PERSON", "Alice")
+    for frags in (["x &l", "t;PERSON_1&g", "t; y"], ["x \\", "<PERSON_1\\", "> y"],
+                  ["x \\u00", "3cPERSON_1\\u00", "3e y"]):
+        r = StreamRestorer(m.restore)
+        out = "".join(r.feed(f) for f in frags) + r.flush()
+        assert out == "x Alice y", frags
+
+
+def test_json_escaped_restore_unicode_escaped_token():
+    restore = json_escaped(lambda t: t.replace("<PERSON_1>", "Alice"))
+    assert json.loads(restore('{"to": "\\u003cPERSON_1\\u003e"}')) == {"to": "Alice"}

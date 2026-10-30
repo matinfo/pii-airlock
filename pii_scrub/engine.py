@@ -121,6 +121,7 @@ class ScrubEngine:
 
 def apply_detections(text: str, detections: list[Detection], mapping: Mapping) -> str:
     """Replace `detections` in `text` with tokens from `mapping`."""
+    mapping.reserve(text)
     out = text
     for d in sorted(_dedupe_overlaps(detections), key=lambda x: x.start, reverse=True):
         token = mapping.token_for(d.entity_type, text[d.start : d.end])
