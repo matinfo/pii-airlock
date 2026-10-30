@@ -7,6 +7,7 @@ token format and reversibility through a Mapping.
 
 from __future__ import annotations
 
+import re
 import threading
 from dataclasses import dataclass
 from functools import cached_property
@@ -79,15 +80,28 @@ class ScrubEngine:
 
     # --- public API -------------------------------------------------------
 
+    @cached_property
+    def _rules(self) -> _Rules:
+        return _Rules.from_config(self.config)
+
     def detect(self, text: str, language: str | None = None) -> list[Detection]:
-        """Return PII detections above the configured score threshold.
+        """Return PII detections: model findings filtered by the policy, plus rules.
+
+        Model detections inside an ``allow_list`` term are dropped; ``deny_list``
+        terms and ``custom_patterns`` are always reported (score 1.0 by default).
+        """
+        if not text.strip():
+            return []
+        rules = self._rules
+        return rules.filter(text, self._analyze(text, language)) + rules.match(text)
+
+    def _analyze(self, text: str, language: str | None = None) -> list[Detection]:
+        """Model (Presidio) detections above the configured score threshold.
 
         With no `language`, every configured language is analyzed and the
         results are unioned: mixed EN/FR text is common and a single-language
         pass silently misses names in the other language.
         """
-        if not text.strip():
-            return []
         langs = [language] if language else (self.languages or self.config.languages[:1])
         entities = self.config.entities or None
         results = []
@@ -117,6 +131,54 @@ class ScrubEngine:
         replaced right-to-left so earlier offsets stay valid.
         """
         return apply_detections(text, self.detect(text, language), mapping)
+
+
+@dataclass
+class _Rules:
+    """Compiled policy: allow-list terms, deny-list terms, custom patterns."""
+
+    allow: list[re.Pattern]
+    match_rules: list[tuple[str, re.Pattern, float]]
+
+    @classmethod
+    def from_config(cls, config: Config) -> _Rules:
+        allow = [_term_re(t) for t in config.allow_list if str(t).strip()]
+        rules = [
+            (entity, _term_re(term), 1.0)
+            for entity, terms in config.deny_list.items()
+            for term in terms if str(term).strip()
+        ]
+        for spec in config.custom_patterns:
+            try:
+                entity = str(spec["entity"]).upper()
+                pattern = re.compile(spec["regex"])
+            except (KeyError, TypeError, re.error) as exc:
+                raise ValueError(
+                    f"Invalid custom_patterns entry {spec!r}: needs `entity` and a valid "
+                    f"`regex` ({exc})"
+                ) from None
+            rules.append((entity, pattern, float(spec.get("score", 1.0))))
+        return cls(allow, rules)
+
+    def filter(self, text: str, detections: list[Detection]) -> list[Detection]:
+        if not self.allow:
+            return detections
+        spans = [m.span() for rx in self.allow for m in rx.finditer(text)]
+        return [d for d in detections
+                if not any(s <= d.start and d.end <= e for s, e in spans)]
+
+    def match(self, text: str) -> list[Detection]:
+        return [
+            Detection(entity, m.start(), m.end(), score)
+            for entity, rx, score in self.match_rules
+            for m in rx.finditer(text)
+            if m.end() > m.start()
+        ]
+
+
+def _term_re(term: str) -> re.Pattern:
+    """Whole-word, case-insensitive match of a literal term."""
+    return re.compile(r"(?<!\w)" + re.escape(str(term).strip()) + r"(?!\w)", re.IGNORECASE)
 
 
 def apply_detections(text: str, detections: list[Detection], mapping: Mapping) -> str:
