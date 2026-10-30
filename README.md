@@ -278,6 +278,7 @@ exclude_entities: [DATE_TIME, URL, NRP, US_DRIVER_LICENSE, US_BANK_NUMBER,
                    US_PASSPORT, IN_VEHICLE_REGISTRATION]  # noisy in code; [] keeps all
 score_thresholds: {}  # per-entity minimum, e.g. {PERSON: 0.7}
 builtin_recognizers: true  # FR/CH IDs, FR/CH phone formats, secrets (see below)
+analysis_cache_size: 2048  # texts remembered per language (digest + offsets, never the text); 0 = off
 hook_decision: ask    # tool calls: ask (surface + confirm) | deny (block)
 prompt_decision: block  # prompts: block (show scrubbed version) | warn (send anyway)
 hook_on_error: closed   # detection failure: closed (treat as PII) | open (skip)

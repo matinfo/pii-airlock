@@ -64,6 +64,14 @@ def _is_generation_endpoint(adapter, path: str) -> bool:
     return any(frag in path for frag in adapter.request_endpoints)
 
 
+def _scrub_request(engine, payload: dict, adapter, mapping) -> dict:
+    """Scrub a request body, analyzing all its strings as one batch first."""
+    from .engine import collect_texts
+
+    engine.prime(collect_texts(lambda grab: scrub_payload(payload, adapter, grab)))
+    return scrub_payload(payload, adapter, lambda t: engine.scrub(t, mapping))
+
+
 def _is_passthrough(config: Config, provider: str, path: str) -> bool:
     """Whether an unscrubbable body may be forwarded raw (explicit opt-in)."""
     full = f"{provider}/{path}"
@@ -145,8 +153,7 @@ def build_app(
                 )
             try:
                 scrubbed = await run_in_threadpool(
-                    scrub_payload, payload, adapter,
-                    lambda t: engine.scrub(t, mapping),
+                    _scrub_request, engine, payload, adapter, mapping
                 )
             except RuntimeError as exc:
                 # e.g. spaCy model not installed — fail loud, don't leak by

@@ -66,6 +66,7 @@ def column_entity(header: str) -> str | None:
 
 class CsvHandler(Handler):
     reads_binary = False
+    many_texts = True
     binary_output = False
     out_suffix = ".csv"
 
@@ -94,6 +95,7 @@ class CsvHandler(Handler):
 
 class JsonHandler(Handler):
     reads_binary = False
+    many_texts = True
     binary_output = False
     out_suffix = ".json"
 

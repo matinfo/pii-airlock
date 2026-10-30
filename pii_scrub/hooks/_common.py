@@ -140,13 +140,12 @@ def _read_file_text(tool_input: dict, cwd: str | None, config: Config) -> str | 
 
 
 def _detect_types(engine: ScrubEngine, texts: list[str]) -> Counter:
+    chunks = [c for text in texts if text and text.strip() for c in _chunks(text)]
+    engine.prime(chunks)
     found: Counter = Counter()
-    for text in texts:
-        if not text or not text.strip():
-            continue
-        for chunk in _chunks(text):
-            for det in engine.detect(chunk):
-                found[det.entity_type] += 1
+    for chunk in chunks:
+        for det in engine.detect(chunk):
+            found[det.entity_type] += 1
     return found
 
 

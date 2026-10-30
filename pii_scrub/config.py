@@ -58,6 +58,7 @@ class Config:
     exclude_entities: list[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDED_ENTITIES))
     score_thresholds: dict[str, float] = field(default_factory=dict)
     builtin_recognizers: bool = True
+    analysis_cache_size: int = 2048
     hook_decision: str = "ask"
     prompt_decision: str = "block"
     hook_on_error: str = "closed"

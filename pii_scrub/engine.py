@@ -7,15 +7,17 @@ token format and reversibility through a Mapping.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import threading
-from collections.abc import Iterable
+from collections import OrderedDict
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import cached_property
 
 from .config import Config, load_config
 from .mapping import Mapping
-from .recognizers import detect_builtin
+from .recognizers import Finding, detect_builtin
 
 
 @dataclass
@@ -37,6 +39,10 @@ class ScrubEngine:
         # spaCy pipelines are not thread-safe; serialize analysis so the engine
         # can be shared across threads (e.g. the proxy's request handlers).
         self._lock = threading.Lock()
+        # Model findings per (language, entities, text digest), most recent last.
+        # Chat clients resend the whole conversation every turn: without this,
+        # each request re-runs spaCy over the entire history.
+        self._cache: OrderedDict[tuple, tuple[Finding, ...]] = OrderedDict()
 
     # --- lazy, expensive Presidio objects --------------------------------
 
@@ -116,16 +122,9 @@ class ScrubEngine:
         results are unioned: mixed EN/FR text is common and a single-language
         pass silently misses names in the other language.
         """
-        langs = [language] if language else (self.languages or self.config.languages[:1])
-        entities = self.config.entities or None
-        results = []
-        # The lock also guards the first lazy build of _analyzer.
-        with self._lock:
-            for lang in langs:
-                results.extend(
-                    self._analyzer.analyze(text=text, language=lang, entities=entities)
-                )
-        findings = [(r.entity_type, r.start, r.end, r.score) for r in results]
+        findings: list[Finding] = []
+        for lang in self._langs(language):
+            findings.extend(self._model_findings(text, lang))
         if self.config.builtin_recognizers:
             findings.extend(detect_builtin(text))
         # Pattern recognizers run once per language: collapse identical spans.
@@ -135,6 +134,71 @@ class ScrubEngine:
                 key = (entity_type, start, end)
                 best[key] = max(score, best.get(key, 0.0))
         return [Detection(t, s, e, score) for (t, s, e), score in best.items()]
+
+    def _langs(self, language: str | None) -> list[str]:
+        return [language] if language else (self.languages or self.config.languages[:1])
+
+    def _cache_key(self, text: str, lang: str) -> tuple:
+        # A digest, not the text: the cache keeps no copy of the PII it saw.
+        digest = hashlib.blake2b(text.encode("utf-8", "surrogatepass"), digest_size=16)
+        return (lang, tuple(self.config.entities), digest.digest())
+
+    def _cache_put(self, key: tuple, results) -> tuple[Finding, ...]:
+        findings = tuple((r.entity_type, r.start, r.end, r.score) for r in results)
+        if self.config.analysis_cache_size > 0:
+            self._cache[key] = findings
+            while len(self._cache) > self.config.analysis_cache_size:
+                self._cache.popitem(last=False)
+        return findings
+
+    def _model_findings(self, text: str, lang: str) -> tuple[Finding, ...]:
+        """Presidio findings for one language, unfiltered (the policy applies later)."""
+        key = self._cache_key(text, lang)
+        # The lock also guards the first lazy build of _analyzer.
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+            results = self._analyzer.analyze(
+                text=text, language=lang, entities=self.config.entities or None
+            )
+            return self._cache_put(key, results)
+
+    def prime(self, texts: Iterable[str], language: str | None = None) -> None:
+        """Analyze `texts` as one spaCy batch per language and cache the findings.
+
+        Call it before scrubbing many strings (a chat payload, CSV cells): spaCy's
+        batched pipeline is about twice as fast as one call per string. At most
+        what the cache holds is primed, so no primed entry is evicted before use.
+        """
+        langs = self._langs(language)
+        limit = self.config.analysis_cache_size // max(len(langs), 1)
+        unique = list(dict.fromkeys(t for t in texts if t.strip()))[:limit]
+        if len(unique) < 2:
+            return
+        entities = self.config.entities or None
+        with self._lock:
+            analyzer = self._analyzer
+            nlp_engine = getattr(analyzer, "nlp_engine", None)
+            if nlp_engine is None:
+                return
+            for lang in langs:
+                todo = []
+                for text in unique:
+                    key = self._cache_key(text, lang)
+                    if key in self._cache:
+                        self._cache.move_to_end(key)  # keep it past this batch's inserts
+                    else:
+                        todo.append((text, key))
+                if not todo:
+                    continue
+                batch = nlp_engine.process_batch(
+                    texts=[t for t, _ in todo], language=lang, batch_size=32
+                )
+                for (text, key), (_, artifacts) in zip(todo, batch, strict=True):
+                    self._cache_put(key, analyzer.analyze(
+                        text=text, language=lang, entities=entities, nlp_artifacts=artifacts
+                    ))
 
     def _keep(self, entity_type: str, score: float) -> bool:
         """Apply `exclude_entities` (unless asked for in `entities`) and thresholds."""
@@ -268,6 +332,23 @@ def apply_detections(text: str, detections: list[Detection], mapping: Mapping) -
         pos = d.end
     parts.append(text[pos:])
     return "".join(parts)
+
+
+def collect_texts(run: Callable[[Callable[[str], str]], object]) -> list[str]:
+    """The strings `run` passes to its transform, run once with an identity transform.
+
+    `run` must have no side effects, e.g. a payload adapter building a new body:
+    ``collect_texts(lambda f: scrub_payload(body, adapter, f))`` lists what a real
+    scrub of `body` will analyze, so it can be primed as one batch.
+    """
+    texts: list[str] = []
+
+    def grab(text: str) -> str:
+        texts.append(text)
+        return text
+
+    run(grab)
+    return texts
 
 
 def _model_available(model: str) -> bool:

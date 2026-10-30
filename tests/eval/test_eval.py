@@ -33,3 +33,23 @@ def test_detection_quality_gate():
     report = evaluate(load_corpus(), SMALL_MODELS)
     failures = check_gate(report, json.loads(THRESHOLDS.read_text("utf-8")))
     assert not failures, format_report(report, verbose=True)
+
+
+@pytest.mark.eval
+def test_batched_analysis_matches_one_by_one():
+    from pii_scrub.config import Config
+    from pii_scrub.engine import ScrubEngine
+
+    models = available_models(SMALL_MODELS)
+    if not models:
+        pytest.skip("no small spaCy model installed")
+    texts = [case["text"] for case in load_corpus()]
+
+    def run(prime: bool):
+        engine = ScrubEngine(Config(languages=list(models), models=models))
+        if prime:
+            engine.prime(texts)
+        return [sorted((d.entity_type, d.start, d.end, d.score) for d in engine.detect(t))
+                for t in texts]
+
+    assert run(prime=True) == run(prime=False)

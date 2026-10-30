@@ -36,6 +36,9 @@ class Handler:
     binary_output: bool = False
     #: suffix for a default output file
     out_suffix: str = ".txt"
+    #: scrub() passes many small strings (cells, runs) to the scrubber, worth
+    #: analyzing as one batch first
+    many_texts: bool = False
 
     def __init__(self, raw: str | bytes) -> None:
         self.raw = raw

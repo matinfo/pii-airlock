@@ -6,6 +6,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -87,21 +88,26 @@ def scrub(
     out: Path | None = typer.Option(None, "-o", "--out", help="Output file; omit for stdout."),
 ) -> None:
     """Replace PII with stable tokens, optionally saving a reversible mapping."""
-    from .engine import ScrubEngine  # lazy: avoids loading Presidio for --help
+    from .engine import ScrubEngine, collect_texts  # lazy: avoids loading Presidio for --help
 
     config = _build_config(lang, threshold)
-    engine = ScrubEngine(config)
-
     handler_cls = get_handler_class(file, fmt)
     raw = _read_input(file, handler_cls.reads_binary)
 
     mapping = Mapping()
 
-    def _scrub_text(text: str) -> str:
-        return engine.scrub(text, mapping)
-
     try:
-        result = handler_cls(raw).scrub(_scrub_text, mapping.token_for)
+        texts: list[str] = []
+        if handler_cls.many_texts and config.analysis_cache_size > 0:
+            # Dry run with an identity tokenizer: lists the cells to analyze
+            # (header-profiled columns need none) without minting tokens.
+            texts = collect_texts(lambda grab: handler_cls(raw).scrub(grab, lambda _e, v: v))
+            # One-shot process: hold the whole file's findings, not just the default.
+            size = max(config.analysis_cache_size, len(texts) * len(config.languages))
+            config = replace(config, analysis_cache_size=size)
+        engine = ScrubEngine(config)
+        engine.prime(texts)
+        result = handler_cls(raw).scrub(lambda t: engine.scrub(t, mapping), mapping.token_for)
     except MissingExtra as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None

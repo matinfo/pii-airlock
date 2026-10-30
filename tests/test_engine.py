@@ -153,3 +153,112 @@ def test_short_parts_and_particles_not_propagated():
     eng = _engine_finding("Anna de la Cruz")
     out = eng.scrub("Anna de la Cruz: de facto la decision", Mapping())
     assert out.endswith(": de facto la decision")
+
+
+class _CountingAnalyzer:
+    """Finds 'Jean' as PERSON; counts calls; batches through a fake nlp_engine."""
+
+    def __init__(self, batched=True):
+        from types import SimpleNamespace
+
+        self.calls: list[str] = []
+        self.batches: list[list[str]] = []
+        if batched:
+            self.nlp_engine = SimpleNamespace(process_batch=self._process_batch)
+
+    def _process_batch(self, texts, language, batch_size):
+        self.batches.append(list(texts))
+        return ((t, f"artifacts:{t}") for t in texts)
+
+    def analyze(self, text, language, entities, nlp_artifacts=None):
+        from types import SimpleNamespace
+
+        if nlp_artifacts is None:
+            self.calls.append(text)
+        else:
+            assert nlp_artifacts == f"artifacts:{text}"
+        i = text.find("Jean")
+        return [] if i < 0 else [SimpleNamespace(entity_type="PERSON", start=i,
+                                                 end=i + 4, score=0.85)]
+
+
+def _caching_engine(analyzer, languages=("en",), **config):
+    from pii_scrub.config import Config
+
+    eng = ScrubEngine(Config(languages=list(languages), builtin_recognizers=False, **config))
+    eng.__dict__["_analyzer"] = analyzer
+    return eng
+
+
+def test_repeated_text_is_analyzed_once():
+    analyzer = _CountingAnalyzer()
+    eng = _caching_engine(analyzer)
+    first = eng.detect("Hi Jean")
+    assert eng.detect("Hi Jean") == first
+    eng.detect("Bye Jean")
+    assert analyzer.calls == ["Hi Jean", "Bye Jean"]
+
+
+def test_cache_keeps_no_text_and_policy_still_applies():
+    analyzer = _CountingAnalyzer()
+    eng = _caching_engine(analyzer)
+    assert eng.detect("Hi Jean")
+    assert not any("Jean" in repr(k) for k in eng._cache)
+    eng.config = eng.config.merged_with({"allow_list": ["Jean"]})
+    eng.__dict__.pop("_rules", None)
+    assert eng.detect("Hi Jean") == []  # cached findings, re-filtered
+    assert analyzer.calls == ["Hi Jean"]
+
+
+def test_cache_is_bounded_and_can_be_disabled():
+    analyzer = _CountingAnalyzer()
+    eng = _caching_engine(analyzer, analysis_cache_size=2)
+    for text in ["a Jean", "b Jean", "c Jean", "a Jean"]:
+        eng.detect(text)
+    assert len(eng._cache) == 2
+    assert analyzer.calls == ["a Jean", "b Jean", "c Jean", "a Jean"]  # "a" was evicted
+
+    analyzer = _CountingAnalyzer()
+    eng = _caching_engine(analyzer, analysis_cache_size=0)
+    eng.detect("Hi Jean")
+    eng.detect("Hi Jean")
+    assert analyzer.calls == ["Hi Jean", "Hi Jean"] and not eng._cache
+
+
+def test_prime_batches_uncached_texts_per_language():
+    analyzer = _CountingAnalyzer()
+    eng = _caching_engine(analyzer, languages=("en", "fr"),
+                          models={"en": "x", "fr": "y"})
+    eng.detect("seen Jean")
+    analyzer.calls.clear()
+    eng.prime(["seen Jean", "one Jean", "two", "one Jean", "  "])
+    assert analyzer.batches == [["one Jean", "two"], ["one Jean", "two"]]
+    for text in ["seen Jean", "one Jean", "two"]:
+        eng.detect(text)
+    assert analyzer.calls == []  # every detect served from the cache
+    assert [d.entity_type for d in eng.detect("one Jean")] == ["PERSON"]
+
+
+def test_prime_never_exceeds_what_the_cache_holds():
+    analyzer = _CountingAnalyzer()
+    eng = _caching_engine(analyzer, languages=("en", "fr"), models={"en": "x", "fr": "y"},
+                          analysis_cache_size=4)
+    eng.prime([f"t{i}" for i in range(10)])
+    assert analyzer.batches == [["t0", "t1"], ["t0", "t1"]]
+
+
+def test_prime_without_batch_support_is_a_no_op():
+    analyzer = _CountingAnalyzer(batched=False)
+    eng = _caching_engine(analyzer)
+    eng.prime(["a Jean", "b Jean"])
+    assert not eng._cache and analyzer.calls == []
+
+
+def test_collect_texts_lists_transformed_strings():
+    from pii_scrub.engine import collect_texts
+    from pii_scrub.payload import get_adapter, scrub_payload
+
+    body = {"messages": [{"role": "user", "content": "hi"},
+                         {"role": "user", "content": [{"type": "text", "text": "yo"}]}]}
+    texts = collect_texts(lambda f: scrub_payload(body, get_adapter("anthropic"), f))
+    assert {"hi", "yo"} <= set(texts)

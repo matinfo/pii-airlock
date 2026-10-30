@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- Analysis cache: model findings are remembered per text (by digest, no copy of the
+  text kept), so the conversation history chat clients resend on every turn is not
+  analyzed again (~8x faster on a 20-turn chat). `analysis_cache_size`, 0 disables.
+- Batched analysis: the gateway, `scrub` on CSV/JSON/DOCX and hook file scans run
+  all their strings through spaCy as one batch (about 2x faster than one by one).
 - Detection eval harness (`tests/eval`): labeled EN+FR corpus of fake PII, per-entity
   recall / precision / leak-free report (`python -m tests.eval.run_eval -v`) and a CI job
   that fails below `thresholds.json`.

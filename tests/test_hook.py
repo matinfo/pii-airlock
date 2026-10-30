@@ -14,6 +14,9 @@ class FakeEngine:
     def __init__(self, *_a, **_k):
         pass
 
+    def prime(self, texts, language=None):
+        pass
+
     def detect(self, text, language=None):
         out = []
         idx = text.find("jean@acme.fr")
@@ -24,6 +27,9 @@ class FakeEngine:
 
 class BrokenEngine:
     def __init__(self, *_a, **_k):
+        pass
+
+    def prime(self, texts, language=None):
         pass
 
     def detect(self, text, language=None):

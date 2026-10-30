@@ -25,6 +25,7 @@ _CLEAR_PROPS = ("author", "last_modified_by")
 
 class DocxHandler(Handler):
     reads_binary = True
+    many_texts = True
     binary_output = True
     out_suffix = ".docx"
 

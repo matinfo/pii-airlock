@@ -22,6 +22,12 @@ from pii_scrub.proxy import build_app  # noqa: E402
 class FakeEngine:
     """Stub ScrubEngine: replaces the literal name 'Alice' with a stable token."""
 
+    def __init__(self):
+        self.primed: list[str] = []
+
+    def prime(self, texts, language=None) -> None:
+        self.primed.extend(texts)
+
     def scrub(self, text: str, mapping: Mapping, language=None) -> str:
         if "Alice" in text:
             token = mapping.token_for("PERSON", "Alice")
@@ -100,6 +106,24 @@ def test_non_streaming_roundtrip():
     assert "<PERSON_1>" in seen["sent"]
     # client must get the real name back
     assert resp.json()["choices"][0]["message"]["content"] == "call Alice"
+
+
+def test_request_strings_are_primed_as_one_batch():
+    engine = FakeEngine()
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": []})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(upstream))
+    resp = _client(build_app(engine=engine, client=client)).post(
+        "/openai/v1/chat/completions",
+        json={"model": "gpt-x", "messages": [
+            {"role": "system", "content": "be brief"},
+            {"role": "user", "content": "call Alice"},
+        ]},
+    )
+    assert resp.status_code == 200
+    assert {"be brief", "call Alice"} <= set(engine.primed)
 
 
 def test_streaming_roundtrip_restores_tokens():
@@ -201,6 +225,9 @@ def test_upstream_failure_returns_502():
 
 def test_missing_model_returns_503_and_does_not_leak():
     class RaisingEngine:
+        def prime(self, texts, language=None):
+            raise RuntimeError("No spaCy models configured for languages ['en', 'fr'].")
+
         def scrub(self, text, mapping, language=None):
             raise RuntimeError("No spaCy models configured for languages ['en', 'fr'].")
 
