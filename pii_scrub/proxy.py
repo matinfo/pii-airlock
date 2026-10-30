@@ -12,6 +12,10 @@ No TLS interception: the client connects to this local plaintext endpoint, and
 the proxy makes the real HTTPS call upstream. Auth headers pass through verbatim
 and are never logged. A fresh mapping object is used per request (with a
 configurable backend).
+
+Fail closed: a request body the proxy cannot scrub (unknown endpoint, or not
+valid JSON) is refused rather than forwarded, unless its path matches one of
+the configured ``passthrough_paths``.
 """
 
 from __future__ import annotations
@@ -22,9 +26,10 @@ from pathlib import Path
 from .config import Config, load_config
 from .mapping_store import build_mapping_store
 from .payload import (
-    StreamRestorer,
+    StreamState,
+    format_sse,
     get_adapter,
-    restore_sse_data,
+    restore_sse_event,
     scrub_payload,
 )
 
@@ -52,8 +57,17 @@ def _require_deps():
         ) from exc
 
 
+_BODY_METHODS = {"POST", "PUT", "PATCH"}
+
+
 def _is_generation_endpoint(adapter, path: str) -> bool:
     return any(frag in path for frag in adapter.request_endpoints)
+
+
+def _is_passthrough(config: Config, provider: str, path: str) -> bool:
+    """Whether an unscrubbable body may be forwarded raw (explicit opt-in)."""
+    full = f"{provider}/{path}"
+    return any(frag and frag in full for frag in config.passthrough_paths)
 
 
 def build_app(
@@ -81,7 +95,6 @@ def build_app(
     config = config or load_config()
     upstreams = {**DEFAULT_UPSTREAMS, **(upstreams or {})}
     engine = engine if engine is not None else ScrubEngine(config)
-    language = config.languages[0]
     client = client if client is not None else httpx.AsyncClient(
         timeout=httpx.Timeout(600.0, connect=10.0)
     )
@@ -108,31 +121,44 @@ def build_app(
             k: v for k, v in request.headers.items() if k.lower() not in _DROP_REQUEST_HEADERS
         }
 
-        # --- scrub outbound (generation endpoints with a JSON body only) ---
+        # --- scrub outbound; refuse what we can't scrub (fail closed) ---
         mapping = mapping_store.create()
-        scrub_this = _is_generation_endpoint(adapter, path) and bool(body)
+        has_body = bool(body) and request.method in _BODY_METHODS
+        scrub_this = has_body and _is_generation_endpoint(adapter, path)
+        if has_body and not scrub_this and not _is_passthrough(config, provider, path):
+            return Response(
+                f"pii-airlock: refusing to forward a request body to '{provider}/{path}' "
+                "— this endpoint is not scrubbed. If it carries no personal data, add it "
+                "to `passthrough_paths` in your config.",
+                status_code=403,
+            )
         if scrub_this:
             try:
                 payload = json.loads(body)
             except ValueError:
-                scrub_this = False
-            else:
-                try:
-                    scrubbed = await run_in_threadpool(
-                        scrub_payload, payload, adapter,
-                        lambda t: engine.scrub(t, mapping, language),
-                    )
-                except RuntimeError as exc:
-                    # e.g. spaCy model not installed — fail loud, don't leak by
-                    # silently forwarding the original PII.
-                    return Response(
-                        f"pii-airlock: cannot scrub request — {exc}\n"
-                        "Run `pii-airlock download-models`.",
-                        status_code=503,
-                    )
-                body = json.dumps(scrubbed, ensure_ascii=False).encode("utf-8")
-                map_key = mapping_store.save(mapping)
-                mapping = mapping_store.load(map_key)
+                payload = None
+            if not isinstance(payload, dict):
+                return Response(
+                    "pii-airlock: refusing to forward a request body that is not a JSON "
+                    "object (cannot scrub it).",
+                    status_code=400,
+                )
+            try:
+                scrubbed = await run_in_threadpool(
+                    scrub_payload, payload, adapter,
+                    lambda t: engine.scrub(t, mapping),
+                )
+            except RuntimeError as exc:
+                # e.g. spaCy model not installed — fail loud, don't leak by
+                # silently forwarding the original PII.
+                return Response(
+                    f"pii-airlock: cannot scrub request — {exc}\n"
+                    "Run `pii-airlock download-models`.",
+                    status_code=503,
+                )
+            body = json.dumps(scrubbed, ensure_ascii=False).encode("utf-8")
+            map_key = mapping_store.save(mapping)
+            mapping = mapping_store.load(map_key)
 
         # Forward the raw query string so multi-value params (and Gemini's ?key=)
         # are preserved exactly.
@@ -202,8 +228,12 @@ def build_app(
 async def _restore_stream(
     upstream_resp, adapter, mapping, mapping_store=None, map_key: str | None = None
 ):
-    """Yield SSE events with tokens restored, reassembling tokens split across chunks."""
-    restorer = StreamRestorer(mapping.restore)
+    """Yield SSE events with tokens restored, reassembling tokens split across chunks.
+
+    Each text channel (choice, content block, tool call) is restored separately;
+    held-back tails are released before their block/choice closes.
+    """
+    state = StreamState(mapping.restore)
     buffer = ""
     try:
         async for text in upstream_resp.aiter_text():
@@ -212,31 +242,17 @@ async def _restore_stream(
             buffer += text.replace("\r\n", "\n")
             while "\n\n" in buffer:
                 event, _, buffer = buffer.partition("\n\n")
-                yield _restore_event(event, adapter, restorer) + "\n\n"
+                yield restore_sse_event(event, adapter, state)
         if buffer.strip():
-            yield _restore_event(buffer, adapter, restorer) + "\n\n"
-        # Flush any held-back token tail as one final, provider-shaped chunk.
-        tail = restorer.flush()
+            yield restore_sse_event(buffer, adapter, state)
+        # Truncated stream: release whatever is still held back.
+        tail = format_sse(adapter.finish(state))
         if tail:
-            chunk = adapter.text_chunk(tail)
-            if chunk is not None:
-                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            yield tail
     finally:
         await upstream_resp.aclose()
         if map_key is not None and mapping_store is not None:
             mapping_store.delete(map_key)
-
-
-def _restore_event(raw_event: str, adapter, restorer: StreamRestorer) -> str:
-    """Rewrite a single SSE event block, restoring tokens in its data payload."""
-    from .payload import split_sse_event
-
-    event_name, data = split_sse_event(raw_event)
-    if data is None:
-        return raw_event  # comment / keep-alive / event-only line — leave as-is
-    restored = restore_sse_data(data, adapter, restorer)
-    prefix = f"event: {event_name}\n" if event_name else ""
-    return f"{prefix}data: {restored}"
 
 
 def run(

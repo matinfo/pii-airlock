@@ -246,3 +246,122 @@ def test_proxy_uses_injected_mapping_store():
     assert store.saved == 1
     assert store.loaded == 1
     assert store.deleted == 1
+
+
+def _app_cfg(handler, **config):
+    from pii_scrub.config import Config
+
+    transport = httpx.MockTransport(handler)
+    return build_app(Config(**config), engine=FakeEngine(),
+                     client=httpx.AsyncClient(transport=transport))
+
+
+def test_unknown_endpoint_with_body_is_refused():
+    sent = {}
+
+    def upstream(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        sent["hit"] = True
+        return httpx.Response(200, json={})
+
+    client = _client(_app(upstream))
+    resp = client.post("/openai/v1/files", content=b"call Alice")
+    assert resp.status_code == 403
+    assert "passthrough_paths" in resp.text
+    assert "hit" not in sent
+
+
+def test_passthrough_paths_opt_in_forwards_raw():
+    sent = {}
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        sent["body"] = request.content
+        return httpx.Response(200, json={"ok": True})
+
+    client = _client(_app_cfg(upstream, passthrough_paths=["openai/v1/files"]))
+    resp = client.post("/openai/v1/files", content=b"raw bytes")
+    assert resp.status_code == 200
+    assert sent["body"] == b"raw bytes"
+
+
+def test_unparseable_generation_body_is_refused():
+    def upstream(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+        raise AssertionError("must not be forwarded")
+
+    client = _client(_app(upstream))
+    resp = client.post("/openai/v1/chat/completions", content=b"call Alice, not json")
+    assert resp.status_code == 400
+
+
+def test_responses_api_scrubbed_and_restored():
+    seen = {}
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen["body"] = request.content.decode()
+        token = body["input"][0]["content"][0]["text"].split("call ")[1]
+        return httpx.Response(200, headers={"content-type": "application/json"}, json={
+            "object": "response",
+            "output": [
+                {"type": "function_call", "name": "dial", "arguments": json.dumps({"who": token})},
+                {"type": "message", "content": [{"type": "output_text", "text": f"ok {token}"}]},
+            ],
+        })
+
+    client = _client(_app(upstream))
+    resp = client.post("/openai/v1/responses", json={
+        "model": "x", "instructions": "Alice is the user",
+        "input": [
+            {"role": "user", "content": [{"type": "input_text", "text": "call Alice"}]},
+            {"type": "function_call_output", "call_id": "c", "output": "Alice's file"},
+        ],
+    })
+    assert resp.status_code == 200
+    assert "Alice" not in seen["body"]
+    out = resp.json()["output"]
+    assert json.loads(out[0]["arguments"]) == {"who": "Alice"}
+    assert out[1]["content"][0]["text"] == "ok Alice"
+
+
+def test_anthropic_tool_result_scrubbed_and_stream_restored():
+    seen = {}
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        seen["body"] = request.content.decode()
+        token = json.loads(request.content)["messages"][0]["content"][0]["content"]
+
+        def ev(name, data):
+            return f"event: {name}\ndata: {json.dumps({'type': name, **data})}\n\n"
+
+        sse = (
+            ev("message_start", {"message": {"content": []}})
+            + ev("content_block_start", {"index": 0, "content_block": {"type": "text", "text": ""}})
+            + ev("content_block_delta", {"index": 0, "delta": {"type": "text_delta",
+                                                                "text": "hi " + token[:4]}})
+            + ev("content_block_delta", {"index": 0, "delta": {"type": "text_delta",
+                                                                "text": token[4:]}})
+            + ev("content_block_stop", {"index": 0})
+            + ev("message_stop", {})
+        )
+        return httpx.Response(200, headers={"content-type": "text/event-stream"},
+                              content=sse.encode())
+
+    client = _client(_app(upstream))
+    resp = client.post("/anthropic/v1/messages", json={
+        "model": "x", "stream": True,
+        "messages": [{"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "t", "content": "Alice"}]}],
+    })
+    assert "Alice" not in seen["body"]
+    text = ""
+    names = []
+    for block in resp.text.split("\n\n"):
+        if not block.strip():
+            continue
+        name, _, data = block.partition("\ndata: ")
+        chunk = json.loads(data)
+        names.append(name.removeprefix("event: "))
+        assert names[-1] == chunk["type"]
+        if chunk["type"] == "content_block_delta":
+            text += chunk["delta"]["text"]
+    assert text == "hi Alice"
+    assert names[-1] == "message_stop"

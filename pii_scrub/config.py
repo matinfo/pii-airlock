@@ -35,6 +35,10 @@ class Config:
     score_threshold: float = 0.5
     entities: list[str] = field(default_factory=list)
     hook_decision: str = "ask"
+    prompt_decision: str = "block"
+    hook_on_error: str = "closed"
+    hook_max_file_bytes: int = 2_000_000
+    passthrough_paths: list[str] = field(default_factory=list)
     mapping_backend: str = "memory"
     mapping_dir: str | None = None
 

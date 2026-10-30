@@ -27,6 +27,28 @@ entities: []
 #   deny -> block the action / prompt outright
 hook_decision: ask
 
+# What the UserPromptSubmit hook does when your prompt contains PII.
+# (Claude Code cannot "ask" on prompts: the prompt is either blocked or sent.)
+#   block -> stop the prompt and show you a scrubbed version to send instead
+#   warn  -> send the prompt anyway, with a warning (PII still leaves your machine)
+prompt_decision: block
+
+# What the hooks do when detection itself fails (e.g. spaCy model missing):
+#   closed -> treat the input as containing PII (ask/deny/block as configured)
+#   open   -> let it through unchecked
+hook_on_error: closed
+
+# Largest file (bytes) the PreToolUse hook scans when Claude reads a file.
+# Larger files are treated like a detection failure (see hook_on_error).
+hook_max_file_bytes: 2000000
+
+# The gateway refuses request bodies it does not know how to scrub (fail closed).
+# List path fragments ("<provider>/<path>") whose bodies may be forwarded raw,
+# e.g. endpoints you know carry no personal data:
+#   passthrough_paths:
+#     - openai/v1/files
+passthrough_paths: []
+
 # Mapping storage backend (advanced):
 #   memory -> process-local ephemeral mappings (default; fastest)
 #   file   -> save mappings under `mapping_dir` or ./.pii-airlock-maps
