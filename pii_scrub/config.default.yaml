@@ -51,7 +51,7 @@ passthrough_paths: []
 
 # Mapping storage backend (advanced):
 #   memory -> process-local ephemeral mappings (default; fastest)
-#   file   -> save mappings under `mapping_dir` or ./.pii-airlock-maps
+#   file   -> save mappings under `mapping_dir` or ~/.local/state/pii-airlock/maps
 mapping_backend: memory
 
 # Optional directory for mapping_backend: file

@@ -49,3 +49,18 @@ def test_build_mapping_store():
     assert isinstance(build_mapping_store("file"), FileMappingStore)
     with pytest.raises(ValueError):
         build_mapping_store("bogus")
+
+
+def test_file_store_defaults_to_private_state_dir(tmp_path, monkeypatch):
+    import stat
+
+    from pii_scrub.mapping_store import build_mapping_store
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.chdir(tmp_path)
+    store = build_mapping_store("file")
+    key = store.save(store.create())
+    root = tmp_path / "state" / "pii-airlock" / "maps"
+    assert (root / f"{key}.pii-map.json").is_file()
+    assert stat.S_IMODE(root.stat().st_mode) == 0o700
+    assert not (tmp_path / ".pii-airlock-maps").exists()  # nothing in the project dir
