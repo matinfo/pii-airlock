@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import threading
+from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -85,8 +86,18 @@ class ScrubEngine:
     def _rules(self) -> _Rules:
         return _Rules.from_config(self.config)
 
-    def detect(self, text: str, language: str | None = None) -> list[Detection]:
+    def detect(
+        self,
+        text: str,
+        language: str | None = None,
+        known: Iterable[tuple[str, str]] = (),
+    ) -> list[Detection]:
         """Return PII detections: model findings filtered by the policy, plus rules.
+
+        Every value found is also matched wherever else it appears, with the
+        parts of person names ("Dupont" after "Jean Dupont"): NER often finds a
+        name once and misses its other mentions. `known` adds (entity, value)
+        pairs found earlier, e.g. in previous messages of the same request.
 
         Model detections inside an ``allow_list`` term are dropped; ``deny_list``
         terms and ``custom_patterns`` are always reported (score 1.0 by default).
@@ -94,7 +105,9 @@ class ScrubEngine:
         if not text.strip():
             return []
         rules = self._rules
-        return rules.filter(text, self._analyze(text, language)) + rules.match(text)
+        found = self._analyze(text, language)
+        found += _propagate(text, found, known)
+        return rules.filter(text, found) + rules.match(text)
 
     def _analyze(self, text: str, language: str | None = None) -> list[Detection]:
         """Model (Presidio) detections above the configured score threshold.
@@ -141,7 +154,7 @@ class ScrubEngine:
         Overlapping detections are de-duplicated (highest score wins); spans are
         replaced right-to-left so earlier offsets stay valid.
         """
-        return apply_detections(text, self.detect(text, language), mapping)
+        return apply_detections(text, self.detect(text, language, mapping.items()), mapping)
 
 
 @dataclass
@@ -187,6 +200,57 @@ class _Rules:
         ]
 
 
+# Name particles and titles: never propagated on their own.
+_NAME_STOPWORDS = {
+    "de", "du", "des", "la", "le", "les", "van", "von", "der", "den", "di", "da", "del",
+    "dos", "mr", "mrs", "ms", "dr", "mme", "mlle", "m", "herr", "frau", "prof",
+}
+_MIN_TERM = 3
+
+
+def _name_parts(value: str) -> list[str]:
+    parts = re.split(r"\s+", value.strip())
+    if len(parts) < 2:
+        return []
+    return [
+        p for p in parts
+        if len(p) >= _MIN_TERM and p[0].isupper()
+        and p.rstrip(".").casefold() not in _NAME_STOPWORDS
+    ]
+
+
+def _propagate(
+    text: str, detections: list[Detection], known: Iterable[tuple[str, str]]
+) -> list[Detection]:
+    """Find other mentions of values already detected (and of person-name parts)."""
+    terms: dict[str, tuple[str, float]] = {}
+
+    def add(entity: str, value: str, score: float) -> None:
+        value = value.strip()
+        if len(value) >= _MIN_TERM and value.casefold() not in terms:
+            terms[value.casefold()] = (entity, score)
+        if entity == "PERSON":
+            for part in _name_parts(value):
+                terms.setdefault(part.casefold(), (entity, score))
+
+    for d in detections:
+        add(d.entity_type, text[d.start : d.end], d.score)
+    for entity, value in known:
+        add(entity, value, 0.85)
+    if not terms:
+        return []
+    alternation = "|".join(re.escape(t) for t in sorted(terms, key=len, reverse=True))
+    rx = re.compile(r"(?<!\w)(?:" + alternation + r")(?!\w)", re.IGNORECASE)
+    taken = [(d.start, d.end) for d in detections]
+    out = []
+    for m in rx.finditer(text):
+        if any(m.start() < e and s < m.end() for s, e in taken):
+            continue  # already detected
+        entity, score = terms[m.group(0).casefold()]
+        out.append(Detection(entity, m.start(), m.end(), score))
+    return out
+
+
 def _term_re(term: str) -> re.Pattern:
     """Whole-word, case-insensitive match of a literal term."""
     return re.compile(r"(?<!\w)" + re.escape(str(term).strip()) + r"(?!\w)", re.IGNORECASE)
@@ -195,11 +259,15 @@ def _term_re(term: str) -> re.Pattern:
 def apply_detections(text: str, detections: list[Detection], mapping: Mapping) -> str:
     """Replace `detections` in `text` with tokens from `mapping`."""
     mapping.reserve(text)
-    out = text
-    for d in sorted(_dedupe_overlaps(detections), key=lambda x: x.start, reverse=True):
-        token = mapping.token_for(d.entity_type, text[d.start : d.end])
-        out = out[: d.start] + token + out[d.end :]
-    return out
+    spans = sorted(_dedupe_overlaps(detections), key=lambda x: x.start)
+    # Mint in reading order (<PERSON_1> is the first person mentioned), then
+    # build the output in one pass.
+    parts, pos = [], 0
+    for d in spans:
+        parts += [text[pos : d.start], mapping.token_for(d.entity_type, text[d.start : d.end])]
+        pos = d.end
+    parts.append(text[pos:])
+    return "".join(parts)
 
 
 def _model_available(model: str) -> bool:

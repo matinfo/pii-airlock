@@ -74,6 +74,15 @@ class Mapping:
             text,
         )
 
+    def items(self) -> list[tuple[str, str]]:
+        """(entity_type, value) for every value minted so far."""
+        out = []
+        for token, value in self._token_to_value.items():
+            m = ANY_TOKEN_RE.fullmatch(token)
+            if m:
+                out.append((m.group(1).rsplit("_", 1)[0], value))
+        return out
+
     def __len__(self) -> int:
         return len(self._token_to_value)
 

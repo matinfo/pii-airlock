@@ -11,7 +11,7 @@ from pii_scrub.mapping import Mapping
 
 def _engine_with(detections):
     eng = ScrubEngine()
-    eng.detect = lambda text, language=None: detections  # type: ignore[method-assign]
+    eng.detect = lambda text, language=None, known=(): detections  # type: ignore[method-assign]
     return eng
 
 
@@ -113,3 +113,43 @@ def test_per_entity_score_thresholds():
     eng = _engine_returning([("PERSON", 0, 4, 0.7), ("PHONE_NUMBER", 5, 9, 0.6)])
     eng.config = cfg
     assert [d.entity_type for d in eng.detect("x" * 20)] == ["PHONE_NUMBER"]
+
+
+def _engine_finding(value, entity="PERSON"):
+    """Analyzer that detects only the first occurrence of `value` (like flaky NER)."""
+    from types import SimpleNamespace
+
+    from pii_scrub.config import Config
+
+    def analyze(text, language, entities):
+        i = text.find(value)
+        return [] if i < 0 else [SimpleNamespace(entity_type=entity, start=i,
+                                                 end=i + len(value), score=0.85)]
+
+    eng = ScrubEngine(Config(languages=["en"], builtin_recognizers=False))
+    eng.__dict__["_analyzer"] = SimpleNamespace(analyze=analyze)
+    return eng
+
+
+def test_other_mentions_and_name_parts_are_scrubbed():
+    eng = _engine_finding("Jean Dupont")
+    m = Mapping()
+    out = eng.scrub("Jean Dupont called. Later M. Dupont, then JEAN DUPONT, wrote.", m)
+    assert "Dupont" not in out and "DUPONT" not in out
+    assert out.startswith("<PERSON_1> called.")
+    assert "M. " in out  # title kept
+    assert m.restore(out) == "Jean Dupont called. Later M. Dupont, then JEAN DUPONT, wrote."
+
+
+def test_values_from_earlier_texts_are_scrubbed():
+    eng = _engine_finding("Jean Dupont")
+    m = Mapping()
+    eng.scrub("From Jean Dupont", m)
+    # This message alone has no model finding: the known value still applies.
+    assert eng.scrub("Dupont says hi", m).startswith("<PERSON_")
+
+
+def test_short_parts_and_particles_not_propagated():
+    eng = _engine_finding("Anna de la Cruz")
+    out = eng.scrub("Anna de la Cruz: de facto la decision", Mapping())
+    assert out.endswith(": de facto la decision")
