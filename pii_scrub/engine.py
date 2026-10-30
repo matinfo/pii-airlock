@@ -14,6 +14,7 @@ from functools import cached_property
 
 from .config import Config, load_config
 from .mapping import Mapping
+from .recognizers import detect_builtin
 
 
 @dataclass
@@ -111,12 +112,15 @@ class ScrubEngine:
                 results.extend(
                     self._analyzer.analyze(text=text, language=lang, entities=entities)
                 )
+        findings = [(r.entity_type, r.start, r.end, r.score) for r in results]
+        if self.config.builtin_recognizers:
+            findings.extend(detect_builtin(text))
         # Pattern recognizers run once per language: collapse identical spans.
         best: dict[tuple[str, int, int], float] = {}
-        for r in results:
-            if self._keep(r.entity_type, r.score):
-                key = (r.entity_type, r.start, r.end)
-                best[key] = max(r.score, best.get(key, 0.0))
+        for entity_type, start, end, score in findings:
+            if self._keep(entity_type, score):
+                key = (entity_type, start, end)
+                best[key] = max(score, best.get(key, 0.0))
         return [Detection(t, s, e, score) for (t, s, e), score in best.items()]
 
     def _keep(self, entity_type: str, score: float) -> bool:

@@ -38,6 +38,10 @@ exclude_entities:
 #   score_thresholds: {PERSON: 0.7, PHONE_NUMBER: 0.4}
 score_thresholds: {}
 
+# Built-in recognizers Presidio lacks (FR NIR, CH AHV, SIRET/SIREN, FR/CH phone
+# formats, API keys / passwords as SECRET). Checksum-validated, every language.
+builtin_recognizers: true
+
 # Default decision returned by the Claude Code hooks when PII is found:
 #   ask  -> surface the PII and let the user confirm (recommended)
 #   deny -> block the action / prompt outright

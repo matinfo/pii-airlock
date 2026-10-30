@@ -277,6 +277,7 @@ entities: []          # empty = all entities Presidio recognizes, minus exclude_
 exclude_entities: [DATE_TIME, URL, NRP, US_DRIVER_LICENSE, US_BANK_NUMBER,
                    US_PASSPORT, IN_VEHICLE_REGISTRATION]  # noisy in code; [] keeps all
 score_thresholds: {}  # per-entity minimum, e.g. {PERSON: 0.7}
+builtin_recognizers: true  # FR/CH IDs, FR/CH phone formats, secrets (see below)
 hook_decision: ask    # tool calls: ask (surface + confirm) | deny (block)
 prompt_decision: block  # prompts: block (show scrubbed version) | warn (send anyway)
 hook_on_error: closed   # detection failure: closed (treat as PII) | open (skip)
@@ -291,6 +292,21 @@ mapping_backend: memory   # memory (default) | file
 For higher-volume/self-hosted setups, `mapping_backend: file` can be useful for
 debugging or operational inspection. `memory` stays the safest default for local
 use because mappings are ephemeral.
+
+### Built-in recognizers
+
+On top of Presidio, pii-airlock ships checksum-validated recognizers that work in
+every language and need no model:
+
+| Entity | What | Validation |
+|---|---|---|
+| `FR_NIR` | French social security number | mod-97 key (incl. Corsica 2A/2B) |
+| `CH_AHV` | Swiss AHV/AVS number `756.xxxx.xxxx.xx` | EAN-13 check digit |
+| `FR_SIRET` / `FR_SIREN` | French business IDs (sole traders are people) | Luhn; SIREN needs the keyword |
+| `PHONE_NUMBER` | FR/CH national formats (`06 12 34 56 78`, `079 123 45 67`) | format |
+| `SECRET` | AWS/GitHub/Slack/OpenAI/Anthropic/Google/Stripe keys, JWTs, private keys, URL passwords, `password=…` values | format |
+
+Exclude any of them with `exclude_entities`, or all with `builtin_recognizers: false`.
 
 ### Per-project policy (Claude Code skill)
 

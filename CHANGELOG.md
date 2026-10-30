@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- Built-in recognizers (regex + checksum, every language): French NIR, Swiss AHV/AVS,
+  SIRET/SIREN, FR/CH national phone formats, and secrets (cloud/API keys, JWTs,
+  private keys, URL and assignment passwords). `builtin_recognizers: false` disables.
 - Per-project policy in `.claude/skills/pii-airlock/SKILL.md` (a Claude Code skill plus
   a `yaml pii-airlock` config block); user-level skill for personal rules.
 - Policy keys `allow_list`, `deny_list`, `custom_patterns`, accumulated across layers.
