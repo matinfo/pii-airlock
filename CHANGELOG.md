@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Other mentions of a detected value are scrubbed too, including parts of person
   names ("Dupont" after "Jean Dupont"), and values found earlier in the same
   request or file. NER often finds a name once and misses the rest.
+- CSV: columns whose header marks personal data (`Nom`, `Prénom`, `email`,
+  `Téléphone`, `IBAN`, `date of birth`, …, EN/FR/DE) are tokenized cell by cell,
+  even when NER can't recognize a lone value; the header row is kept.
 - Tokens are numbered in reading order (`<PERSON_1>` is the first person mentioned).
 - Noisy entity types are skipped by default (`exclude_entities`: `DATE_TIME`, `URL`,
   `NRP`, `US_DRIVER_LICENSE`, `US_BANK_NUMBER`, `US_PASSPORT`,

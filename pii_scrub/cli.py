@@ -101,7 +101,7 @@ def scrub(
         return engine.scrub(text, mapping)
 
     try:
-        result = handler_cls(raw).scrub(_scrub_text)
+        result = handler_cls(raw).scrub(_scrub_text, mapping.token_for)
     except MissingExtra as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None

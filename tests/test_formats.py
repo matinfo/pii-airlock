@@ -77,3 +77,28 @@ def test_docx_handler_covers_headers_tables_hyperlinks_and_metadata():
     assert out.sections[0].footer.paragraphs[0].text == "Footer <PERSON_1>"
     assert out.core_properties.author == ""
     assert out.core_properties.title == "Notes about <PERSON_1>"
+
+
+def test_csv_pii_columns_tokenized_by_header():
+    from pii_scrub.formats.csv_json import column_entity
+    from pii_scrub.mapping import Mapping
+
+    assert column_entity("Prénom") == "PERSON"
+    assert column_entity("work_email") == "EMAIL_ADDRESS"
+    assert column_entity("Date de naissance") == "DATE_OF_BIRTH"
+    assert column_entity("customer_id") is None
+    assert column_entity("Status") is None
+
+    m = Mapping()
+    raw = "id,Nom,Téléphone,notes\n1,Martin,079 123 45 67,ok\n2,Rossi,,call Martin\n"
+    out = CsvHandler(raw).scrub(fake_scrub, m.token_for)
+    lines = out.splitlines()
+    assert lines[0] == "id,Nom,Téléphone,notes"  # header kept
+    assert lines[1] == "1,<PERSON_1>,<PHONE_NUMBER_1>,ok"
+    assert lines[2].startswith("2,<PERSON_2>,,")
+    assert m.restore(out).replace("\r\n", "\n") == raw
+
+
+def test_csv_without_tokenizer_scrubs_cells():
+    out = CsvHandler("Nom\nJean\n").scrub(fake_scrub)
+    assert out.splitlines() == ["Nom", "<PERSON_1>"]

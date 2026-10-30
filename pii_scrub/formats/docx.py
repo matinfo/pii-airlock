@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import io
 
-from .base import Handler, MissingExtra, Scrubber
+from .base import Handler, MissingExtra, Scrubber, Tokenizer
 
 # Core properties that are free text (scrubbed) / identify a person (cleared).
 _SCRUB_PROPS = ("title", "subject", "keywords", "comments", "category", "content_status")
@@ -28,7 +28,7 @@ class DocxHandler(Handler):
     binary_output = True
     out_suffix = ".docx"
 
-    def scrub(self, scrub: Scrubber) -> bytes:
+    def scrub(self, scrub: Scrubber, tokenize: Tokenizer | None = None) -> bytes:
         try:
             import docx  # type: ignore
             from docx.opc.part import XmlPart  # type: ignore

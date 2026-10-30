@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import io
 
-from .base import Handler, MissingExtra, Scrubber
+from .base import Handler, MissingExtra, Scrubber, Tokenizer
 
 
 class PdfHandler(Handler):
@@ -18,7 +18,7 @@ class PdfHandler(Handler):
     binary_output = False
     out_suffix = ".txt"
 
-    def scrub(self, scrub: Scrubber) -> str:
+    def scrub(self, scrub: Scrubber, tokenize: Tokenizer | None = None) -> str:
         try:
             from pdfminer.high_level import extract_text  # type: ignore
         except ImportError as exc:  # pragma: no cover - depends on install

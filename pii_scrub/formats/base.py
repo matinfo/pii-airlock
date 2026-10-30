@@ -13,6 +13,8 @@ from __future__ import annotations
 from collections.abc import Callable
 
 Scrubber = Callable[[str], str]
+#: (entity_type, value) -> token; replaces a whole value known to be PII
+Tokenizer = Callable[[str, str], str]
 
 
 class MissingExtra(RuntimeError):
@@ -38,5 +40,7 @@ class Handler:
     def __init__(self, raw: str | bytes) -> None:
         self.raw = raw
 
-    def scrub(self, scrub: Scrubber) -> str | bytes:  # pragma: no cover - abstract
+    def scrub(
+        self, scrub: Scrubber, tokenize: Tokenizer | None = None
+    ) -> str | bytes:  # pragma: no cover - abstract
         raise NotImplementedError
