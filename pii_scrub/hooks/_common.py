@@ -150,6 +150,12 @@ def _detect_types(engine: ScrubEngine, texts: list[str]) -> Counter:
     return found
 
 
+# Shown with every detection so a false positive costs one command to fix.
+_FALSE_POSITIVE_HINT = (
+    'False positive? `pii-airlock allow "<term>"` adds it to this project\'s policy.'
+)
+
+
 def _summary(found: Counter) -> str:
     return ", ".join(f"{t}×{n}" for t, n in found.most_common())
 
@@ -200,7 +206,7 @@ def run_pre_tool_use() -> None:
             return
         reason = (
             f"pii-airlock: PII detected in {tool} input — {_summary(found)}. "
-            "Review before this leaves your machine."
+            f"Review before this leaves your machine. {_FALSE_POSITIVE_HINT}"
         )
     _emit(
         {
@@ -247,7 +253,8 @@ def run_user_prompt_submit() -> None:
         reason = f"pii-airlock blocked your prompt: PII detected — {summary}."
         if scrubbed is not None:
             reason += f"\n\nScrubbed version you can send instead:\n\n{scrubbed}"
-        reason += "\n\n(Set `prompt_decision: warn` to send prompts with a warning instead.)"
+        reason += (f"\n\n{_FALSE_POSITIVE_HINT} Set `prompt_decision: warn` to send prompts "
+                   "with a warning instead.")
         _emit({"decision": "block", "reason": reason})
         return
     _emit(

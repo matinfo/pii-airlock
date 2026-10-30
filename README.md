@@ -258,8 +258,12 @@ PDFs). For full coverage, route the traffic through the gateway.
 Override chain (lowest → highest priority):
 
 ```
-bundled defaults → ~/.config/pii-airlock/config.yaml → ./.pii-airlock.yaml → CLI flags
+bundled defaults → ~/.config/pii-airlock/config.yaml → ~/.claude/skills/pii-airlock/SKILL.md
+  → ./.pii-airlock.yaml → ./.claude/skills/pii-airlock/SKILL.md → CLI flags
 ```
+
+`allow_list`, `deny_list` and `custom_patterns` accumulate across layers (your
+personal allow list + the project's); every other key is overridden.
 
 Default config (`config.default.yaml`):
 
@@ -284,6 +288,31 @@ mapping_backend: memory   # memory (default) | file
 For higher-volume/self-hosted setups, `mapping_backend: file` can be useful for
 debugging or operational inspection. `memory` stays the safest default for local
 use because mappings are ephemeral.
+
+### Per-project policy (Claude Code skill)
+
+The project policy lives in `.claude/skills/pii-airlock/SKILL.md`. Claude Code loads
+it as a skill (rules for handling personal data, what to do when a hook blocks), and
+pii-airlock reads its fenced `yaml pii-airlock` block as config.
+
+```bash
+pii-airlock policy init                  # create the skill for this project
+pii-airlock allow "Acme SA"              # never PII here (your company, products)
+pii-airlock deny "Project Phoenix" --as CODENAME   # always sensitive here
+pii-airlock allow "Jane Roe" --scope user          # personal, all projects
+pii-airlock policy show                  # effective policy and where it comes from
+```
+
+```yaml pii-airlock
+allow_list: [Acme SA]
+deny_list:
+  CODENAME: [Project Phoenix]
+custom_patterns:
+  - {entity: CONTRACT_ID, regex: 'CT-\d{6}'}
+```
+
+Hooks apply the policy of the project Claude Code is working in. Every detection
+message shows the one-command fix for a false positive.
 
 ### Adding a language
 

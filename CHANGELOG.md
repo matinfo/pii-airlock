@@ -30,7 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hooks **fail closed** when detection can't run (`hook_on_error: closed`), instead of
   silently letting the input through.
 
+### Added
+- Per-project policy in `.claude/skills/pii-airlock/SKILL.md` (a Claude Code skill plus
+  a `yaml pii-airlock` config block); user-level skill for personal rules.
+- Policy keys `allow_list`, `deny_list`, `custom_patterns`, accumulated across layers.
+- Commands `pii-airlock policy init|show`, `pii-airlock allow`, `pii-airlock deny`.
+  Hook messages show the one-command fix for a false positive.
+
 ### Fixed
+- Hooks apply the policy of the project Claude Code reports (event `cwd`), not the
+  hook process's directory; a malformed policy block fails closed instead of crashing
+  the hook.
 - Streaming restore keeps one buffer per choice / content block / tool call, and
   releases held-back text before the block or choice ends — no more synthetic chunk
   after `message_stop` / `[DONE]` and no missing `event:` line (Anthropic SDK errors).

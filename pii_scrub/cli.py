@@ -22,6 +22,9 @@ app = typer.Typer(
 )
 hook_app = typer.Typer(help="Claude Code hook entry points (read JSON from stdin).")
 app.add_typer(hook_app, name="hook")
+policy_app = typer.Typer(help="Per-project PII policy (Claude Code SKILL.md).",
+                         no_args_is_help=True)
+app.add_typer(policy_app, name="policy")
 
 
 def _version_cb(value: bool) -> None:
@@ -430,6 +433,92 @@ def install_hook(
         typer.echo(f"Installed hooks {', '.join(added)} in {path}")
     else:
         typer.echo(f"Hooks already present in {path} — nothing to do.")
+
+
+def _scope_path(scope: str) -> Path:
+    from .policy import skill_path
+
+    if scope not in ("project", "user"):
+        typer.echo("--scope must be 'project' or 'user'", err=True)
+        raise typer.Exit(code=1)
+    return skill_path(scope)
+
+
+def _policy_change(fn, *args) -> bool:
+    from .policy import PolicyError
+
+    try:
+        return fn(*args)
+    except PolicyError as exc:
+        typer.echo(f"{exc}\nFix the policy block by hand, then retry.", err=True)
+        raise typer.Exit(code=1) from None
+
+
+@policy_app.command("init")
+def policy_init(
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing SKILL.md."),
+) -> None:
+    """Create the policy skill (.claude/skills/pii-airlock/SKILL.md)."""
+    from .policy import init_skill
+
+    path = _scope_path(scope)
+    if init_skill(path, force=force):
+        typer.echo(f"Created {path}")
+        typer.echo("Next: pii-airlock allow \"Your Company\"  /  pii-airlock deny \"Client X\"")
+    else:
+        typer.echo(f"{path} already exists — nothing to do (use --force to overwrite).")
+
+
+@policy_app.command("show")
+def policy_show() -> None:
+    """Show the effective policy for the current project and where it comes from."""
+    from .policy import skill_path
+
+    config = _build_config(None, None)
+    for scope in ("user", "project"):
+        path = skill_path(scope)
+        typer.echo(f"{scope:<8} {path}  {'(found)' if path.is_file() else '(none)'}")
+    typer.echo(f"allow_list:      {', '.join(config.allow_list) or '-'}")
+    for entity, terms in config.deny_list.items():
+        typer.echo(f"deny_list {entity}: {', '.join(terms)}")
+    if not config.deny_list:
+        typer.echo("deny_list:       -")
+    for pattern in config.custom_patterns:
+        typer.echo(f"custom pattern:  {pattern.get('entity')}  {pattern.get('regex')}")
+    typer.echo(f"hook_decision: {config.hook_decision}   prompt_decision: "
+               f"{config.prompt_decision}   hook_on_error: {config.hook_on_error}")
+
+
+@app.command()
+def allow(
+    term: str = typer.Argument(..., help="Term that is never PII here, e.g. your company."),
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+) -> None:
+    """Never treat TERM as PII (adds it to the policy allow list)."""
+    from .policy import add_allow
+
+    path = _scope_path(scope)
+    if _policy_change(add_allow, path, term):
+        typer.echo(f"Allowed {term!r} in {path}")
+    else:
+        typer.echo(f"{term!r} is already allowed in {path}")
+
+
+@app.command()
+def deny(
+    term: str = typer.Argument(..., help="Term that is always sensitive, e.g. a client name."),
+    entity: str = typer.Option("CONFIDENTIAL", "--as", help="Label used in tokens."),
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+) -> None:
+    """Always treat TERM as PII (adds it to the policy deny list)."""
+    from .policy import add_deny
+
+    path = _scope_path(scope)
+    if _policy_change(add_deny, path, term, entity):
+        typer.echo(f"Denied {term!r} (as {entity.upper()}) in {path}")
+    else:
+        typer.echo(f"{term!r} is already in the deny list of {path}")
 
 
 @hook_app.command("pre-tool-use")
