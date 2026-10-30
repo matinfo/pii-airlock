@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Commands `pii-airlock policy init|show`, `pii-airlock allow`, `pii-airlock deny`.
   Hook messages show the one-command fix for a false positive.
 
+### Changed
+- Noisy entity types are skipped by default (`exclude_entities`: `DATE_TIME`, `URL`,
+  `NRP`, `US_DRIVER_LICENSE`, `US_BANK_NUMBER`, `US_PASSPORT`,
+  `IN_VEHICLE_REGISTRATION`): every web fetch, date or long number in a command used
+  to trigger a hook prompt. List one in `entities` (or set `exclude_entities: []`)
+  to keep it. New `score_thresholds` sets a minimum score per entity type.
+
 ### Fixed
 - Hooks apply the policy of the project Claude Code reports (event `cwd`), not the
   hook process's directory; a malformed policy block fails closed instead of crashing

@@ -34,6 +34,20 @@ _PROJECT_NAME = ".pii-airlock.yaml"
 # config.default.yaml mirrors these for users to copy and override.
 _DEFAULT_MODELS = {"en": "en_core_web_lg", "fr": "fr_core_news_lg"}
 
+# Presidio entity types skipped unless listed in `entities`. In code, shell
+# commands and URLs they fire constantly (every date, every link, any 9-digit
+# number) and turn the hooks into noise users switch off. PII *inside* a URL
+# (an email, a name) is still caught by its own recognizer.
+DEFAULT_EXCLUDED_ENTITIES = (
+    "DATE_TIME",
+    "URL",
+    "NRP",
+    "US_DRIVER_LICENSE",
+    "US_BANK_NUMBER",
+    "US_PASSPORT",
+    "IN_VEHICLE_REGISTRATION",
+)
+
 
 @dataclass(frozen=True)
 class Config:
@@ -41,6 +55,8 @@ class Config:
     models: dict[str, str] = field(default_factory=lambda: dict(_DEFAULT_MODELS))
     score_threshold: float = 0.5
     entities: list[str] = field(default_factory=list)
+    exclude_entities: list[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDED_ENTITIES))
+    score_thresholds: dict[str, float] = field(default_factory=dict)
     hook_decision: str = "ask"
     prompt_decision: str = "block"
     hook_on_error: str = "closed"
@@ -62,6 +78,12 @@ class Config:
             for entity, terms in normalize_deny(clean["deny_list"]).items():
                 deny[entity] = _union(deny.get(entity, []), terms)
             clean["deny_list"] = deny
+        if "exclude_entities" in clean:
+            clean["exclude_entities"] = [str(e).upper() for e in clean["exclude_entities"]]
+        if "score_thresholds" in clean:
+            clean["score_thresholds"] = {
+                str(k).upper(): float(v) for k, v in (clean["score_thresholds"] or {}).items()
+            }
         if "custom_patterns" in clean:
             clean["custom_patterns"] = [*self.custom_patterns, *clean["custom_patterns"]]
         return replace(self, **clean)

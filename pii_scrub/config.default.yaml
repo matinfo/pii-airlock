@@ -22,6 +22,22 @@ score_threshold: 0.5
 #           IBAN_CODE, LOCATION, URL, DATE_TIME
 entities: []
 
+# Entity types skipped unless listed in `entities` above: they fire on every
+# date, link or long number in code and shell commands. PII inside a URL (an
+# email, a name) is still caught by its own recognizer. Set to [] to keep all.
+exclude_entities:
+  - DATE_TIME
+  - URL
+  - NRP
+  - US_DRIVER_LICENSE
+  - US_BANK_NUMBER
+  - US_PASSPORT
+  - IN_VEHICLE_REGISTRATION
+
+# Per-entity minimum confidence, overriding score_threshold, e.g.
+#   score_thresholds: {PERSON: 0.7, PHONE_NUMBER: 0.4}
+score_thresholds: {}
+
 # Default decision returned by the Claude Code hooks when PII is found:
 #   ask  -> surface the PII and let the user confirm (recommended)
 #   deny -> block the action / prompt outright

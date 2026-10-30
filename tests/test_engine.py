@@ -76,3 +76,40 @@ def test_detect_serializes_concurrent_calls():
         t.join()
 
     assert fake.max_concurrent == 1  # never two threads inside analyze at once
+
+
+def _engine_returning(results, **config):
+    """Engine whose analyzer returns fixed Presidio-like results."""
+    from types import SimpleNamespace
+
+    from pii_scrub.config import Config
+
+    eng = ScrubEngine(Config(languages=["en"], **config))
+    eng.__dict__["_analyzer"] = SimpleNamespace(
+        analyze=lambda text, language, entities: [
+            SimpleNamespace(entity_type=t, start=s, end=e, score=sc) for t, s, e, sc in results
+        ]
+    )
+    return eng
+
+
+def test_noisy_entities_excluded_by_default():
+    eng = _engine_returning([("URL", 0, 5, 0.9), ("DATE_TIME", 6, 8, 0.9),
+                             ("EMAIL_ADDRESS", 9, 12, 0.9)])
+    assert [d.entity_type for d in eng.detect("x" * 20)] == ["EMAIL_ADDRESS"]
+
+
+def test_explicit_entities_override_exclusion():
+    eng = _engine_returning([("URL", 0, 5, 0.9)], entities=["URL"])
+    assert [d.entity_type for d in eng.detect("x" * 20)] == ["URL"]
+    eng = _engine_returning([("URL", 0, 5, 0.9)], exclude_entities=[])
+    assert [d.entity_type for d in eng.detect("x" * 20)] == ["URL"]
+
+
+def test_per_entity_score_thresholds():
+    from pii_scrub.config import Config
+
+    cfg = Config(languages=["en"]).merged_with({"score_thresholds": {"person": 0.8}})
+    eng = _engine_returning([("PERSON", 0, 4, 0.7), ("PHONE_NUMBER", 5, 9, 0.6)])
+    eng.config = cfg
+    assert [d.entity_type for d in eng.detect("x" * 20)] == ["PHONE_NUMBER"]

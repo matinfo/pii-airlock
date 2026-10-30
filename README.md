@@ -273,7 +273,10 @@ models:
   en: en_core_web_lg
   fr: fr_core_news_lg
 score_threshold: 0.5
-entities: []          # empty = all entities Presidio recognizes
+entities: []          # empty = all entities Presidio recognizes, minus exclude_entities
+exclude_entities: [DATE_TIME, URL, NRP, US_DRIVER_LICENSE, US_BANK_NUMBER,
+                   US_PASSPORT, IN_VEHICLE_REGISTRATION]  # noisy in code; [] keeps all
+score_thresholds: {}  # per-entity minimum, e.g. {PERSON: 0.7}
 hook_decision: ask    # tool calls: ask (surface + confirm) | deny (block)
 prompt_decision: block  # prompts: block (show scrubbed version) | warn (send anyway)
 hook_on_error: closed   # detection failure: closed (treat as PII) | open (skip)

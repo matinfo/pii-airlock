@@ -114,10 +114,17 @@ class ScrubEngine:
         # Pattern recognizers run once per language: collapse identical spans.
         best: dict[tuple[str, int, int], float] = {}
         for r in results:
-            if r.score >= self.config.score_threshold:
+            if self._keep(r.entity_type, r.score):
                 key = (r.entity_type, r.start, r.end)
                 best[key] = max(r.score, best.get(key, 0.0))
         return [Detection(t, s, e, score) for (t, s, e), score in best.items()]
+
+    def _keep(self, entity_type: str, score: float) -> bool:
+        """Apply `exclude_entities` (unless asked for in `entities`) and thresholds."""
+        cfg = self.config
+        if entity_type in cfg.exclude_entities and entity_type not in cfg.entities:
+            return False
+        return score >= cfg.score_thresholds.get(entity_type, cfg.score_threshold)
 
     def scrub(
         self,
