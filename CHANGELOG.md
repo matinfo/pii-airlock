@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Gateway: OpenAI **Responses API** (Codex CLI) requests were forwarded with PII in
+  clear; `input`, `instructions`, function-call arguments and outputs are now scrubbed,
+  and `output[]` / `response.*.delta` events restored.
+- Gateway: tool traffic is scrubbed for all providers — Anthropic `tool_use` /
+  `tool_result` / text `document`, OpenAI `tool_calls` and `tool` messages, Gemini
+  `functionCall` / `functionResponse`. Tool-call arguments are restored (JSON-escaped).
+- Gateway now **fails closed**: bodies sent to endpoints it cannot scrub (file uploads,
+  audio, …) are refused with 403, and non-JSON bodies on scrubbed endpoints with 400.
+  New `passthrough_paths` config opts specific paths out.
+- Gateway also scrubs embeddings, moderations, Anthropic `count_tokens` / message
+  batches, and Gemini `countTokens` / `embedContent`.
+- Detection now runs for **every configured language** and merges results; pattern
+  recognizers (email, phone, IBAN, credit card, …) are registered for every language,
+  so a non-English first language no longer disables them.
+- Hooks: `Read` now scans the file content, not just its path; `Grep`, `WebFetch`,
+  `WebSearch`, `NotebookEdit` and MCP tools are checked too.
+- Hooks: prompts with PII are **blocked by default** (`prompt_decision: block`) and the
+  user is shown a scrubbed version. Previously the prompt was sent with only a note to
+  the model.
+- Hooks **fail closed** when detection can't run (`hook_on_error: closed`), instead of
+  silently letting the input through.
+
+### Fixed
+- Streaming restore keeps one buffer per choice / content block / tool call, and
+  releases held-back text before the block or choice ends — no more synthetic chunk
+  after `message_stop` / `[DONE]` and no missing `event:` line (Anthropic SDK errors).
+- `install-hook` upgrades the tool matcher of an existing pii-airlock entry.
+
 ## [0.2.3] - 2026-06-20
 
 ### Fixed

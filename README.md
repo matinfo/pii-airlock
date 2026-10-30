@@ -156,9 +156,18 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:8745/anthropic
 
 | Route | Wire format | Covers | Streaming |
 |---|---|---|---|
-| `/openai` | OpenAI Chat Completions | OpenAI, Codex, Cursor, Continue, Ollama, LiteLLM, vLLM, … | SSE ✅ |
-| `/anthropic` | Anthropic Messages | Claude SDKs, Claude-compatible tools | SSE ✅ |
-| `/gemini` | Gemini generateContent | Google Gemini | SSE ✅ · array-stream buffered |
+| `/openai` | Chat Completions, Responses, Completions, Embeddings, Moderations | OpenAI, Codex, Cursor, Continue, Ollama, LiteLLM, vLLM, … | SSE ✅ |
+| `/anthropic` | Messages (incl. `count_tokens`, batches) | Claude SDKs, Claude-compatible tools | SSE ✅ |
+| `/gemini` | generateContent, countTokens, embedContent | Google Gemini | SSE ✅ · array-stream buffered |
+
+Tool traffic is covered too: tool results / function outputs (where file contents
+and command output live) and tool-call arguments are scrubbed on the way out;
+tool-call arguments the model emits are restored on the way back.
+
+**Fail closed.** A request body the gateway doesn't know how to scrub — an unknown
+endpoint (file uploads, audio, …) or a body that isn't JSON — is refused (403/400)
+instead of being forwarded. Opt specific paths out with `passthrough_paths` if you
+know they carry no personal data.
 
 Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, Codex, Cursor, Continue, Aider, Gemini).
 
@@ -223,15 +232,24 @@ pii-airlock install-hook --event tool     # PreToolUse only
 pii-airlock install-hook --event prompt   # UserPromptSubmit only
 ```
 
-| Leak vector | Covered by |
-|---|---|
-| PII you type in a prompt | `UserPromptSubmit` |
-| PII in a file Claude reads | `PreToolUse` |
-| PII in a shell command Claude runs | `PreToolUse` |
+| Leak vector | Covered by | Default action |
+|---|---|---|
+| PII you type in a prompt | `UserPromptSubmit` | **block**, shows a scrubbed version to send instead |
+| PII in a text file Claude reads (the hook scans the file content) | `PreToolUse` (`Read`) | ask |
+| PII in a shell command, file write/edit, search pattern, URL or web query | `PreToolUse` | ask |
+| PII in MCP tool arguments | `PreToolUse` (`mcp__*`) | ask |
 
-The hooks **detect and warn/ask** — they don't silently rewrite payloads (the hook API doesn't support in-place rewriting). For a silent, reversible rewrite, use the CLI pipe above.
+The hooks **detect and block/ask** — they don't silently rewrite payloads (the hook API doesn't support in-place rewriting). For a silent, reversible rewrite, use the CLI pipe above.
 
-Set `hook_decision: deny` in config to block instead of asking.
+- `hook_decision: deny` blocks tool calls instead of asking.
+- `prompt_decision: warn` sends prompts containing PII anyway, with a warning
+  (Claude Code has no "ask" for prompts: it's block or send).
+- If detection can't run (e.g. missing spaCy model), the hooks **fail closed**: the
+  input is treated as containing PII. Set `hook_on_error: open` to skip checks instead.
+
+**Not covered by hooks:** the *output* of a command or tool (e.g. `cat` in Bash, Grep
+matches, a fetched web page) reaches the model unchecked, as do binary files (images,
+PDFs). For full coverage, route the traffic through the gateway.
 
 ---
 
@@ -252,7 +270,11 @@ models:
   fr: fr_core_news_lg
 score_threshold: 0.5
 entities: []          # empty = all entities Presidio recognizes
-hook_decision: ask    # ask (surface + confirm) | deny (block)
+hook_decision: ask    # tool calls: ask (surface + confirm) | deny (block)
+prompt_decision: block  # prompts: block (show scrubbed version) | warn (send anyway)
+hook_on_error: closed   # detection failure: closed (treat as PII) | open (skip)
+hook_max_file_bytes: 2000000  # larger files read by Claude count as a detection failure
+passthrough_paths: []   # gateway: path fragments whose bodies may be forwarded unscrubbed
 
 # Advanced (proxy runtime):
 mapping_backend: memory   # memory (default) | file
@@ -298,9 +320,13 @@ models:
   spacing). pii-airlock reduces exposure — it is **not** a guarantee that every piece of
   PII is removed. Review sensitive material; raise `score_threshold` or add custom
   recognizers as needed.
-- **Gateway scope.** Only generation endpoints are scrubbed (chat/messages/generateContent).
-  Embeddings and other endpoints pass through unchanged. Tokens are restored in message
-  **content**, not inside tool-call/function arguments a model may emit.
+- **Gateway scope.** Text in generation, embedding and token-count requests is scrubbed,
+  including tool results and tool-call arguments. Images, audio and file attachments
+  inside a request are forwarded as-is (not inspected). Other endpoints with a body are
+  refused unless listed in `passthrough_paths`. Anthropic `thinking` blocks are signed,
+  so they are neither scrubbed nor restored.
+- **All configured languages are analyzed** for every text and the results merged, so
+  mixed EN/FR text is covered — at the cost of one NER pass per language.
 - **Gemini array streaming** (without `alt=sse`) is buffered, then restored as one
   response rather than streamed live.
 - **`.docx`** scrubbing rewrites changed paragraphs into a single run, so inline

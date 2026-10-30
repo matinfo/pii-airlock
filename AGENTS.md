@@ -66,13 +66,17 @@ pii-airlock install-hook --scope user
 
 | Leak vector | Covered by |
 |---|---|
-| PII you type in a prompt | `UserPromptSubmit` |
-| PII in a file Claude reads | `PreToolUse` |
-| PII in a shell command Claude runs | `PreToolUse` |
+| PII you type in a prompt (blocked by default) | `UserPromptSubmit` |
+| PII in a text file Claude reads (content is scanned) | `PreToolUse` |
+| PII in a shell command, edit, search, URL or MCP call | `PreToolUse` |
+
+> Hooks cannot see tool *output* (e.g. what `cat` prints) or binary files. Detection
+> failures fail closed (treated as PII) unless `hook_on_error: open`.
 
 > You *can* also route Claude Code's API traffic through the gateway with
-> `ANTHROPIC_BASE_URL`, but tool-call arguments aren't restored, which can affect
-> agentic runs. Prefer hooks for Claude Code; use the gateway for chat clients.
+> `ANTHROPIC_BASE_URL`: tool results are scrubbed and tool-call arguments restored,
+> so it also covers tool output the hooks can't see. Tokens are per request, though,
+> so the model sees a value under a different token on each turn.
 
 ### Codex CLI / OpenAI SDK / OpenAI-compatible tools
 
@@ -80,7 +84,9 @@ pii-airlock install-hook --scope user
 export OPENAI_BASE_URL=http://127.0.0.1:8745/openai
 ```
 
-Works with the official OpenAI SDKs, the Codex CLI, `litellm` (`api_base=...`),
+Covers Chat Completions *and* the Responses API (used by the Codex CLI), including
+function-call arguments and outputs. Works with the official OpenAI SDKs, the Codex
+CLI, `litellm` (`api_base=...`),
 `vllm`/Ollama front-ends, and most "OpenAI-compatible" tools.
 
 ### Anthropic SDK
