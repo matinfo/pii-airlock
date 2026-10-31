@@ -7,22 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- International phone numbers (`+49 30 ...`, `+39 02 ...`) leaked in German and Italian
-  text: Presidio scores a bare number 0.4 and only boosts it on English context words.
-  A built-in rule now catches any `+CC` number.
-- Digit groups inside an IBAN or card number are no longer also reported as a phone number.
-
-### Added
-- Mapping files are encrypted at rest (AES-256-GCM, key derived from `token.key`) with the
-  file mapping backend. `mapping_encryption: false` opts out; existing plain files still load.
-  New dependency: `cryptography`.
-
-### Changed
-- A weekly CI job (`eval-gliner.yml`, also manual) runs the eval with the GLiNER backend
-  against `tests/eval/thresholds-gliner.json`, without the torch install on every push.
-- The eval corpus covers German and Italian too (`de_core_news_sm`, `it_core_news_sm`).
-
 ## [0.4.0] - 2026-10-31
 
 ### Security
@@ -115,6 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Policy keys `allow_list`, `deny_list`, `custom_patterns`, accumulated across layers.
 - Commands `pii-airlock policy init|show`, `pii-airlock allow`, `pii-airlock deny`.
   Hook messages show the one-command fix for a false positive.
+- Mapping files are encrypted at rest (AES-256-GCM, key derived from `token.key`) with the
+  file mapping backend. `mapping_encryption: false` opts out; existing plain files still load.
+  New dependency: `cryptography`.
 
 ### Changed
 - Tokens default to the stable format (`<PERSON_558644>` instead of `<PERSON_1>`);
@@ -131,6 +118,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IN_VEHICLE_REGISTRATION`): every web fetch, date or long number in a command used
   to trigger a hook prompt. List one in `entities` (or set `exclude_entities: []`)
   to keep it. New `score_thresholds` sets a minimum score per entity type.
+- A weekly CI job (`eval-gliner.yml`, also manual) runs the eval with the GLiNER backend
+  against `tests/eval/thresholds-gliner.json`, without the torch install on every push.
+- The eval corpus covers German and Italian too (`de_core_news_sm`, `it_core_news_sm`).
 
 ### Fixed
 - Hooks apply the policy of the project Claude Code reports (event `cwd`), not the
@@ -140,6 +130,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   releases held-back text before the block or choice ends — no more synthetic chunk
   after `message_stop` / `[DONE]` and no missing `event:` line (Anthropic SDK errors).
 - `install-hook` upgrades the tool matcher of an existing pii-airlock entry.
+- International phone numbers (`+49 30 ...`, `+39 02 ...`) leaked in German and Italian
+  text: Presidio scores a bare number 0.4 and only boosts it on English context words.
+  A built-in rule now catches any `+CC` number.
+- Digit groups inside an IBAN or card number are no longer also reported as a phone number.
 
 ## [0.2.3] - 2026-06-20
 
