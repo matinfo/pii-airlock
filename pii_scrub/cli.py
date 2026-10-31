@@ -688,13 +688,11 @@ def hook_user_prompt_submit() -> None:
 def _daemon_status(config) -> str:
     from . import daemon
 
-    if not daemon.SUPPORTED:
-        return "unsupported on this OS (hooks analyze in-process)"
     if config.hook_daemon == "off":
         return "off (hook_daemon: off)"
     reply = daemon.call({"op": "ping"}, timeout=2.0)
     if reply is not None:
-        return f"running (pid {reply.get('pid')}, socket {daemon.socket_path()})"
+        return f"running (pid {reply.get('pid')}, {daemon.transport()} {daemon.endpoint()})"
     return "not running (starts on the next hook call)"
 
 
@@ -703,9 +701,6 @@ def daemon_start() -> None:
     """Start the daemon in the background and wait until it answers."""
     from . import daemon
 
-    if not daemon.SUPPORTED:
-        typer.echo("The hook daemon needs Unix sockets (not available here).", err=True)
-        raise typer.Exit(code=1)
     if daemon.call({"op": "ping"}, timeout=2.0) is None:
         daemon.spawn(str(Path.cwd()))
     reply = daemon.wait_until_up(10)

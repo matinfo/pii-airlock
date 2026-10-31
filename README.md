@@ -302,8 +302,10 @@ The hooks **detect and block/ask** — they don't silently rewrite payloads (the
 loading the spaCy models costs 0.5–3 s each time. With the default `hook_daemon: auto`,
 the first hook call starts a small background daemon that keeps the models loaded;
 later calls answer in ~60 ms. It listens on a Unix socket (mode 0600, in a directory
-only you can write to), reloads your project policy on every call, and exits after
-`hook_daemon_idle_minutes` (30) idle. Nothing leaves your machine.
+only you can write to) or, on Windows, on `127.0.0.1` with a random secret kept in a file only you
+can read: the hook checks the daemon knows that secret before it sends any text. It reloads your
+project policy on every call, and exits after `hook_daemon_idle_minutes` (30) idle. Nothing leaves
+your machine.
 
 ```bash
 pii-airlock daemon status     # also shown by `pii-airlock doctor`
