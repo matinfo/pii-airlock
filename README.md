@@ -256,6 +256,24 @@ pii-airlock scrub input.txt -o out.txt --map secrets.pii-map.json
 
 ## Claude Code hooks
 
+### As a plugin (one step)
+
+```
+/plugin marketplace add matinfo/pii-airlock
+/plugin install pii-airlock@pii-airlock
+```
+
+Installs the same hooks (`PreToolUse`, `UserPromptSubmit`) plus a `/pii-airlock:setup`
+skill that walks Claude through checking the install, downloading models and setting a
+policy. The plugin cannot install the Python CLI, so install that first
+(`brew install matinfo/tap/pii-airlock` or `pipx install "pii-airlock[proxy]"`).
+**Fails closed:** while the CLI is missing, every prompt and tool call is blocked (a
+`SessionStart` message says why); `PII_AIRLOCK_PLUGIN_FAIL_OPEN=1` lets them through. Use
+the plugin *or* `install-hook`, not both, or each call is scanned twice. The launcher is a
+POSIX shell script: on Windows use `install-hook`.
+
+### With `install-hook`
+
 Register guardrails that intercept PII before it reaches the model:
 
 ```bash

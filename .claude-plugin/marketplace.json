@@ -1,0 +1,12 @@
+{
+  "name": "pii-airlock",
+  "description": "Keep personal data out of LLM traffic",
+  "owner": { "name": "matinfo", "url": "https://github.com/matinfo" },
+  "plugins": [
+    {
+      "name": "pii-airlock",
+      "source": "./plugins/pii-airlock",
+      "description": "Block or scrub PII in prompts, tool calls and files before Claude sees them"
+    }
+  ]
+}

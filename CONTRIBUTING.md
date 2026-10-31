@@ -21,6 +21,8 @@ pytest -q           # unit + integration tests, fully offline
 
 Both must pass. CI runs them on Linux (Python 3.10–3.14) and on macOS + Windows.
 
+- Releases: bump the version in `pyproject.toml`, `pii_scrub/__init__.py` **and**
+  `plugins/pii-airlock/.claude-plugin/plugin.json` (a test checks all three).
 - Detection changes: run `python -m tests.eval.run_eval -v` (needs `en_core_web_sm`,
   `fr_core_news_sm`, `de_core_news_sm` and `it_core_news_sm`) and add a labeled case to `tests/eval/corpus.jsonl`; CI gates on it.
   A weekly job also gates the GLiNER backend (`--backend gliner`, needs `pii-airlock[gliner]`).

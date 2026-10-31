@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Claude Code plugin: `/plugin marketplace add matinfo/pii-airlock`, then
+  `/plugin install pii-airlock@pii-airlock`. Registers the hooks, adds a `/pii-airlock:setup`
+  skill, and fails closed (blocks) when the CLI is not installed. A test keeps the plugin's
+  hooks and version in step with `install-hook` and `pyproject.toml`.
 - `pii-airlock scrub --encrypt-map` writes the mapping file encrypted (same scheme as the
   gateway's file store); `restore --map` detects and opens it with the machine's key.
 - German and Italian identifiers: `DE_TAX_ID` (Steuer-IdNr., checksum + keyword), `DE_TAX_NUMBER`,
