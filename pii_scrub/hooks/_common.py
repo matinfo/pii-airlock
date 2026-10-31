@@ -23,6 +23,7 @@ from pii_scrub import daemon
 from pii_scrub.config import Config, load_config
 from pii_scrub.engine import Detection, ScrubEngine, apply_detections
 from pii_scrub.mapping import Mapping
+from pii_scrub.token_key import token_key
 
 # Tool-input fields worth scanning, per tool name. `Read` is special-cased: the
 # file *content* is what reaches the model, so the hook reads and scans it.
@@ -249,7 +250,8 @@ def run_user_prompt_submit() -> None:
             found = _types(results)
             scrubbed = None
             if len(results) == 1:  # long pastes are chunked: count only
-                scrubbed = apply_detections(prompt, results[0][1], Mapping())
+                # Same tokens as the gateway would send, so the two can be mixed.
+                scrubbed = apply_detections(prompt, results[0][1], Mapping(token_key(config)))
     except _FAILURES as exc:
         if config.hook_on_error == "open":
             return

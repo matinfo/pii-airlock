@@ -6,6 +6,7 @@ Skipped entirely if the optional proxy deps (httpx/starlette) aren't installed.
 from __future__ import annotations
 
 import json
+import re
 import warnings
 
 import pytest
@@ -44,9 +45,9 @@ class CountingStore:
         self._mapping = None
         self._key = "k1"
 
-    def create(self) -> Mapping:
+    def create(self, key=None) -> Mapping:
         self.created += 1
-        return Mapping()
+        return Mapping(key)
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str:
         self.saved += 1
@@ -103,7 +104,7 @@ def test_non_streaming_roundtrip():
     assert resp.status_code == 200
     # upstream must have seen the scrubbed token, NOT the real name
     assert "Alice" not in seen["sent"]
-    assert "<PERSON_1>" in seen["sent"]
+    assert re.search(r"<PERSON_\d{6}>", seen["sent"])  # stable token
     # client must get the real name back
     assert resp.json()["choices"][0]["message"]["content"] == "call Alice"
 
@@ -129,7 +130,7 @@ def test_request_strings_are_primed_as_one_batch():
 def test_streaming_roundtrip_restores_tokens():
     def upstream(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
-        scrubbed = body["messages"][0]["content"]  # contains <PERSON_1>
+        scrubbed = body["messages"][0]["content"]  # contains <PERSON_nnnnnn>
         token = scrubbed.split("call ")[1]
         sse = (
             f'data: {json.dumps({"choices": [{"delta": {"content": "call "}}]})}\n\n'
@@ -392,3 +393,43 @@ def test_anthropic_tool_result_scrubbed_and_stream_restored():
             text += chunk["delta"]["text"]
     assert text == "hi Alice"
     assert names[-1] == "message_stop"
+
+
+def test_tokens_are_stable_across_requests_in_any_order():
+    sent = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content)["messages"])
+        return httpx.Response(200, json={"choices": []})
+
+    client = _client(_app(upstream))
+    client.post("/openai/v1/chat/completions", json={"model": "m", "messages": [
+        {"role": "user", "content": "call Alice"}]})
+    client.post("/openai/v1/chat/completions", json={"model": "m", "messages": [
+        {"role": "user", "content": "something else first"},
+        {"role": "user", "content": "then Alice again"}]})
+    first = sent[0][0]["content"].split()[-1]
+    assert first.startswith("<PERSON_")
+    assert sent[1][1]["content"] == f"then {first} again"  # same token, other position
+
+
+def test_sequential_token_style_still_available():
+    seen = {}
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        seen["sent"] = json.loads(request.content)["messages"][0]["content"]
+        return httpx.Response(200, json={"choices": []})
+
+    _client(_app_cfg(upstream, token_style="sequential")).post(
+        "/openai/v1/chat/completions",
+        json={"model": "m", "messages": [{"role": "user", "content": "call Alice"}]},
+    )
+    assert seen["sent"] == "call <PERSON_1>"
+
+
+def test_bad_token_settings_fail_at_startup():
+    from pii_scrub.config import Config
+
+    with pytest.raises(ValueError, match="token_rotation"):
+        build_app(Config(token_rotation="hourly"), engine=FakeEngine(),
+                  client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: None)))

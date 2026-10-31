@@ -20,7 +20,9 @@ _SAFE_KEY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 class MappingStore(Protocol):
     """Interface for creating/loading/saving mapping objects."""
 
-    def create(self) -> Mapping: ...
+    def create(self, key: bytes | None = None) -> Mapping:
+        """A new mapping; `key` makes its tokens stable (see token_key.py)."""
+        ...
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str: ...
 
@@ -35,8 +37,8 @@ class InMemoryMappingStore:
     def __init__(self) -> None:
         self._items: dict[str, Mapping] = {}
 
-    def create(self) -> Mapping:
-        return Mapping()
+    def create(self, key: bytes | None = None) -> Mapping:
+        return Mapping(key)
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str:
         token = key or uuid4().hex
@@ -65,8 +67,8 @@ class FileMappingStore:
         except OSError:
             pass  # best effort (e.g. filesystems without POSIX perms)
 
-    def create(self) -> Mapping:
-        return Mapping()
+    def create(self, key: bytes | None = None) -> Mapping:
+        return Mapping(key)
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str:
         token = key or uuid4().hex

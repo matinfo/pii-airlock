@@ -32,6 +32,7 @@ from .payload import (
     restore_sse_event,
     scrub_payload,
 )
+from .token_key import token_key
 
 # Default upstreams (override per deployment via build_app / CLI flags).
 DEFAULT_UPSTREAMS: dict[str, str] = {
@@ -101,6 +102,7 @@ def build_app(
     from .engine import ScrubEngine
 
     config = config or load_config()
+    token_key(config)  # fail at startup on a bad token_style / token_rotation
     upstreams = {**DEFAULT_UPSTREAMS, **(upstreams or {})}
     engine = engine if engine is not None else ScrubEngine(config)
     client = client if client is not None else httpx.AsyncClient(
@@ -130,7 +132,8 @@ def build_app(
         }
 
         # --- scrub outbound; refuse what we can't scrub (fail closed) ---
-        mapping = mapping_store.create()
+        # Per request, not at startup: the stable-token key rotates (token_rotation).
+        mapping = mapping_store.create(token_key(config))
         has_body = bool(body) and request.method in _BODY_METHODS
         scrub_this = has_body and _is_generation_endpoint(adapter, path)
         if has_body and not scrub_this and not _is_passthrough(config, provider, path):

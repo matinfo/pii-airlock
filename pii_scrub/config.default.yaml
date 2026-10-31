@@ -93,6 +93,22 @@ hook_fallback: inprocess
 #     - openai/v1/files
 passthrough_paths: []
 
+# How placeholder tokens are named:
+#   stable     -> <PERSON_482913>: a keyed hash of the value, the same in every
+#                 request, file and process. The model sees one person under one
+#                 token across turns, subagents and trimmed histories, and prompt
+#                 caches keep hitting. The key stays on this machine
+#                 (~/.local/state/pii-airlock/token.key): without it a token
+#                 reveals nothing about its value.
+#   sequential -> <PERSON_1>, <PERSON_2> in reading order, per request or file.
+token_style: stable
+
+# stable tokens: how long the same value keeps the same token (day | week | never).
+# Across periods tokens cannot be linked, so the provider cannot follow one
+# person through all your conversations; `never` keeps them forever (e.g. to
+# scrub a dataset in several runs).
+token_rotation: day
+
 # Mapping storage backend (advanced):
 #   memory -> process-local ephemeral mappings (default; fastest)
 #   file   -> save mappings under `mapping_dir` or ~/.local/state/pii-airlock/maps

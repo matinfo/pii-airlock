@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- Stable tokens (default): `<PERSON_558644>` is an HMAC of the value with a local key
+  (`~/.local/state/pii-airlock/token.key`, owner-only), so a value keeps one token
+  across requests, files, processes, trimmed histories and subagents, and prompt
+  caches keep hitting. `token_rotation: day|week|never` (default `day`: unlinkable
+  across days). `token_style: sequential` restores `<PERSON_1>` numbering.
 - Hook daemon: hooks no longer load the spaCy models on every tool call (0.5-3 s).
   The first call starts a background daemon (Unix socket, user-only, idle exit after
   `hook_daemon_idle_minutes`); later calls take ~60 ms. Project policy is reloaded per
@@ -58,6 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Hook messages show the one-command fix for a false positive.
 
 ### Changed
+- Tokens default to the stable format (`<PERSON_558644>` instead of `<PERSON_1>`);
+  set `token_style: sequential` for the old numbering.
 - Other mentions of a detected value are scrubbed too, including parts of person
   names ("Dupont" after "Jean Dupont"), and values found earlier in the same
   request or file. NER often finds a name once and misses the rest.

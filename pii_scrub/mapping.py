@@ -1,7 +1,9 @@
 """Reversible token <-> real-value mapping.
 
-A Mapping mints stable placeholder tokens like ``<PERSON_1>`` for detected PII
-and remembers the original value so it can be restored after an LLM round-trip.
+A Mapping mints placeholder tokens for detected PII and remembers the original
+value so it can be restored after an LLM round-trip. Tokens are sequential
+(``<PERSON_1>``, in reading order) or, with a key, stable (``<PERSON_482913>``,
+a keyed hash of the value; see token_key.py).
 
 SECURITY: the saved mapping file contains the *real* PII. It is written with
 0600 permissions and should never be committed (see .gitignore). Treat it like
@@ -10,9 +12,12 @@ a secret.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import re
+from itertools import count
 from pathlib import Path
 
 # Matches any token this module mints, e.g. <PERSON_1>, <EMAIL_ADDRESS_12>.
@@ -28,7 +33,9 @@ ANY_TOKEN_RE = re.compile(
 class Mapping:
     """Bidirectional, deterministic store of value <-> token pairs."""
 
-    def __init__(self) -> None:
+    def __init__(self, key: bytes | None = None) -> None:
+        # None: sequential tokens; else the HMAC key for stable ones.
+        self._key = key
         # value -> token. Keyed by value alone: the same string tagged PERSON in
         # one place and LOCATION in another must get one token, or the model
         # loses the link between the two mentions.
@@ -53,16 +60,29 @@ class Mapping:
         existing = self._value_to_token.get(value)
         if existing is not None:
             return existing
-        idx = self._counters.get(entity_type, 0)
-        while True:
-            idx += 1
-            token = f"<{entity_type}_{idx}>"
-            if token not in self._reserved:
-                break
-        self._counters[entity_type] = idx
+        if self._key is not None:
+            token = self._stable_token(entity_type, value)
+        else:
+            idx = self._counters.get(entity_type, 0)
+            while True:
+                idx += 1
+                token = f"<{entity_type}_{idx}>"
+                if token not in self._reserved:
+                    break
+            self._counters[entity_type] = idx
         self._value_to_token[value] = token
         self._token_to_value[token] = value
         return token
+
+    def _stable_token(self, entity_type: str, value: str) -> str:
+        """``<ENTITY_nnnnnn>`` from HMAC(key, value); rehashed on a collision."""
+        data = value.encode("utf-8", "surrogatepass")
+        for attempt in count():
+            digest = hmac.new(self._key, b"%d\x00" % attempt + data, hashlib.sha256).digest()
+            token = f"<{entity_type}_{int.from_bytes(digest[:8], 'big') % 10**6:06d}>"
+            if token not in self._reserved and token not in self._token_to_value:
+                return token
+        raise AssertionError("unreachable")
 
     def restore(self, text: str) -> str:
         """Replace every known token in `text` with its original value.

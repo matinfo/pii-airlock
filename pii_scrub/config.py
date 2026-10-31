@@ -67,6 +67,8 @@ class Config:
     hook_daemon_idle_minutes: int = 30
     hook_fallback: str = "inprocess"
     passthrough_paths: list[str] = field(default_factory=list)
+    token_style: str = "stable"
+    token_rotation: str = "day"
     mapping_backend: str = "memory"
     mapping_dir: str | None = None
     allow_list: list[str] = field(default_factory=list)

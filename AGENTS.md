@@ -78,8 +78,8 @@ pii-airlock install-hook --scope user
 
 > You *can* also route Claude Code's API traffic through the gateway with
 > `ANTHROPIC_BASE_URL`: tool results are scrubbed and tool-call arguments restored,
-> so it also covers tool output the hooks can't see. Tokens are per request, though,
-> so the model sees a value under a different token on each turn.
+> so it also covers tool output the hooks can't see. Tokens are stable (a keyed hash
+> of the value), so the model sees a value under the same token on every turn.
 
 ### Codex CLI / OpenAI SDK / OpenAI-compatible tools
 
@@ -158,6 +158,6 @@ it, add tests. PRs welcome (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 pii-airlock proxy &
 export OPENAI_BASE_URL=http://127.0.0.1:8745/openai
 # Run your client with a fake email/name in the prompt, then check the provider
-# dashboard / logs: you should see <EMAIL_ADDRESS_1>, not the real value, while
+# dashboard / logs: you should see a token like <EMAIL_ADDRESS_093117>, not the real value, while
 # your client still shows the real value in the answer.
 ```

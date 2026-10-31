@@ -16,7 +16,7 @@
 Example:
 
 ```text
-John Smith (john@acme.com) → <PERSON_1> (<EMAIL_ADDRESS_1>)
+John Smith (john@acme.com) → <PERSON_482913> (<EMAIL_ADDRESS_093117>)
 ```
 
 Runs on **macOS, Linux, Windows** (Python ≥ 3.10). Built on [Microsoft Presidio](https://microsoft.github.io/presidio/).
@@ -104,11 +104,13 @@ pii-airlock doctor
 
 This checks proxy dependencies, model installation, and mapping roundtrip in one command.
 
-### Quick verification (2 commands)
+### Quick verification
 
 ```bash
-echo "Contact John Smith at john@example.com" | pii-airlock scrub --map /tmp/test.pii-map.json
-echo "Replied to <PERSON_1> on <EMAIL_ADDRESS_1>." | pii-airlock restore --map /tmp/test.pii-map.json
+echo "Contact John Smith at john@example.com" \
+  | pii-airlock scrub --map /tmp/test.pii-map.json -o /tmp/scrubbed.txt
+cat /tmp/scrubbed.txt   # Contact <PERSON_482913> at <EMAIL_ADDRESS_093117>
+pii-airlock restore /tmp/scrubbed.txt --map /tmp/test.pii-map.json
 ```
 
 ---
@@ -148,7 +150,8 @@ export ANTHROPIC_BASE_URL=http://127.0.0.1:8745/anthropic
   the real HTTPS call upstream. No certificates to install. Bind stays on `127.0.0.1` by default.
 - **Auth passes through** untouched and pii-airlock never logs request headers or bodies.
   (uvicorn runs at log level `warning`, so request lines aren't logged either.)
-- A **fresh in-memory mapping per request** — the gateway writes nothing to disk.
+- A **fresh in-memory mapping per request** — the gateway writes no PII to disk (only
+  the stable-token key, see [Tokens](#tokens)).
 - **Concurrency-safe:** detection is serialized with a lock, so the engine is shared
   safely across simultaneous requests.
 
@@ -181,17 +184,31 @@ Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, C
 # 1. Scrub — replaces PII with tokens, saves a mapping file
 echo "Contacte Jean Dupont à jean@acme.fr" \
   | pii-airlock scrub --map /tmp/m.pii-map.json
-# → Contacte <PERSON_1> à <EMAIL_ADDRESS_1>
+# → Contacte <PERSON_558644> à <EMAIL_ADDRESS_094087>
 
 # 2. Send the scrubbed text to your LLM …
 
-# 3. Restore — swap tokens back in the model's response
-echo "J'ai répondu à <PERSON_1> via <EMAIL_ADDRESS_1>." \
+# 3. Restore — swap tokens back in the model's response (use your own tokens)
+echo "J'ai répondu à <PERSON_558644> via <EMAIL_ADDRESS_094087>." \
   | pii-airlock restore --map /tmp/m.pii-map.json
 # → J'ai répondu à Jean Dupont via jean@acme.fr.
 ```
 
-Same value always gets the same token (`<PERSON_1>`) so the model still sees coreference.
+### Tokens
+
+Same value, same token, so the model still sees coreference. By default tokens are
+**stable**: `<PERSON_558644>` is a keyed hash (HMAC-SHA256) of the value, so it is the
+same in every request, file and process — across turns, subagents, trimmed or compacted
+histories — and prompt caches keep hitting. The key is created on first use in
+`~/.local/state/pii-airlock/token.key` (owner-only) and never leaves your machine;
+without it a token reveals nothing about its value.
+
+- `token_rotation: day` (default) | `week` | `never` — how long a value keeps its
+  token. Tokens cannot be linked across periods, so a provider cannot follow one person
+  through all your conversations. Use `never` to scrub a dataset in several runs.
+- `token_style: sequential` — `<PERSON_1>`, `<PERSON_2>` in reading order, per request
+  or file (the previous default).
+- Delete `token.key` to rotate the key immediately.
 
 ### Detect without changing text
 

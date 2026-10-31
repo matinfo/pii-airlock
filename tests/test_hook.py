@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 
 import pytest
 
@@ -161,7 +162,7 @@ def test_user_prompt_submit_blocks_with_scrubbed_version(monkeypatch, capsys):
     payload = json.loads(out)
     assert payload["decision"] == "block"
     assert "EMAIL_ADDRESS" in payload["reason"]
-    assert "mail <EMAIL_ADDRESS_1> please" in payload["reason"]
+    assert re.search(r"mail <EMAIL_ADDRESS_\d{6}> please", payload["reason"])
 
 
 def test_user_prompt_submit_warn_mode_sends(monkeypatch, capsys):
@@ -245,7 +246,7 @@ def test_daemon_answer_is_used_without_loading_an_engine(monkeypatch, capsys, no
                monkeypatch, capsys, engine=BrokenEngine)
     payload = json.loads(out)
     assert payload["decision"] == "block"
-    assert "mail <EMAIL_ADDRESS_1>" in payload["reason"]
+    assert re.search(r"mail <EMAIL_ADDRESS_\d{6}>", payload["reason"])
     assert no_daemon == []
 
 
