@@ -63,6 +63,9 @@ class Config:
     prompt_decision: str = "block"
     hook_on_error: str = "closed"
     hook_max_file_bytes: int = 2_000_000
+    hook_daemon: str = "auto"
+    hook_daemon_idle_minutes: int = 30
+    hook_fallback: str = "inprocess"
     passthrough_paths: list[str] = field(default_factory=list)
     mapping_backend: str = "memory"
     mapping_dir: str | None = None

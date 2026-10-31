@@ -113,10 +113,39 @@ RULES: tuple[Rule, ...] = (
 )
 
 
-def detect_builtin(text: str) -> list[Finding]:
-    """Run every built-in rule over `text`."""
+def _valid_iban(match: str) -> bool:
+    """ISO 13616 check: move the first 4 chars to the end, letters to 10..35, mod 97."""
+    raw = re.sub(r"\s", "", match).upper()
+    if not 15 <= len(raw) <= 34:
+        return False
+    digits = "".join(str(int(c, 36)) for c in raw[4:] + raw[:4])
+    return int(digits) % 97 == 1
+
+
+def _valid_ipv4(match: str) -> bool:
+    return all(int(octet) <= 255 for octet in match.split("."))
+
+
+# Used instead of spaCy/Presidio by the hooks' `hook_fallback: regex` mode: the
+# pattern-based entities Presidio would find. No NER, so no PERSON or LOCATION.
+FALLBACK_RULES: tuple[Rule, ...] = (
+    Rule("EMAIL_ADDRESS",
+         _rx(r"(?<![\w.+-])[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}(?![\w-])"),
+         score=1.0),
+    Rule("IP_ADDRESS", _rx(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])"),
+         score=0.6, validate=_valid_ipv4),
+    Rule("IBAN_CODE", _rx(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b"),
+         score=1.0, validate=_valid_iban),
+    Rule("CREDIT_CARD", _rx(r"(?<![\w-])(?:\d[ -]?){12,18}\d(?![\w-])"),
+         score=1.0, validate=_valid_luhn),
+    Rule("PHONE_NUMBER", _rx(r"(?<![\w+])\+\d{1,3}(?:[ .\-]?\(?\d{1,4}\)?){2,5}(?![\w])"),
+         score=0.7, validate=lambda m: 8 <= len(_digits(m)) <= 15),
+)
+
+
+def _run(rules: tuple[Rule, ...], text: str) -> list[Finding]:
     out: list[Finding] = []
-    for rule in RULES:
+    for rule in rules:
         for m in rule.regex.finditer(text):
             value = m.group(rule.group)
             if not value or (rule.validate and not rule.validate(value)):
@@ -124,3 +153,13 @@ def detect_builtin(text: str) -> list[Finding]:
             start, end = m.span(rule.group)
             out.append((rule.entity, start, end, rule.score))
     return out
+
+
+def detect_builtin(text: str) -> list[Finding]:
+    """Run every built-in rule over `text`."""
+    return _run(RULES, text)
+
+
+def detect_fallback(text: str) -> list[Finding]:
+    """Pattern-only stand-in for the Presidio analyzer (see FALLBACK_RULES)."""
+    return _run(FALLBACK_RULES, text)

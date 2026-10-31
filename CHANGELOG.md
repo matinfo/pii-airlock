@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- Hook daemon: hooks no longer load the spaCy models on every tool call (0.5-3 s).
+  The first call starts a background daemon (Unix socket, user-only, idle exit after
+  `hook_daemon_idle_minutes`); later calls take ~60 ms. Project policy is reloaded per
+  call, a daemon running older code steps aside, failures still fail closed.
+  `pii-airlock daemon start|stop|status|run`, shown in `doctor`. `hook_daemon: off`
+  disables it (no daemon on Windows).
+- `hook_fallback: regex`: when no daemon answers, hooks can use patterns only
+  (emails, phones, IBAN, cards, IPs, IDs, secrets, deny list) instead of loading
+  models; names and places are not detected in that mode.
 - Analysis cache: model findings are remembered per text (by digest, no copy of the
   text kept), so the conversation history chat clients resend on every turn is not
   analyzed again (~8x faster on a 20-turn chat). `analysis_cache_size`, 0 disables.

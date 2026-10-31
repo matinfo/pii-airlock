@@ -17,7 +17,7 @@ from functools import cached_property
 
 from .config import Config, load_config
 from .mapping import Mapping
-from .recognizers import Finding, detect_builtin
+from .recognizers import Finding, detect_builtin, detect_fallback
 
 
 @dataclass
@@ -34,8 +34,10 @@ class Detection:
 class ScrubEngine:
     """Detect and scrub PII across the configured languages."""
 
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, *, regex_only: bool = False) -> None:
         self.config = config or load_config()
+        # No spaCy: pattern recognizers only (fast start, but names are missed).
+        self.regex_only = regex_only
         # spaCy pipelines are not thread-safe; serialize analysis so the engine
         # can be shared across threads (e.g. the proxy's request handlers).
         self._lock = threading.Lock()
@@ -81,6 +83,24 @@ class ScrubEngine:
             supported_languages=languages,
         )
 
+    def load(self) -> None:
+        """Load the models now rather than on the first detection."""
+        if not self.regex_only:
+            with self._lock:
+                self._analyzer  # noqa: B018 - builds the cached analyzer
+
+    def with_config(self, config: Config) -> ScrubEngine:
+        """An engine applying `config`'s policy with this engine's loaded models.
+
+        `config` must use the same languages and models; the model findings
+        cache is shared too (it holds unfiltered findings, policy applies later).
+        """
+        other = ScrubEngine(config, regex_only=self.regex_only)
+        other._lock, other._cache = self._lock, self._cache
+        if "_analyzer" in self.__dict__:
+            other.__dict__["_analyzer"] = self._analyzer
+        return other
+
     @property
     def languages(self) -> list[str]:
         """Configured languages that have a spaCy model."""
@@ -123,8 +143,11 @@ class ScrubEngine:
         pass silently misses names in the other language.
         """
         findings: list[Finding] = []
-        for lang in self._langs(language):
-            findings.extend(self._model_findings(text, lang))
+        if self.regex_only:
+            findings.extend(detect_fallback(text))
+        else:
+            for lang in self._langs(language):
+                findings.extend(self._model_findings(text, lang))
         if self.config.builtin_recognizers:
             findings.extend(detect_builtin(text))
         # Pattern recognizers run once per language: collapse identical spans.
@@ -171,6 +194,8 @@ class ScrubEngine:
         batched pipeline is about twice as fast as one call per string. At most
         what the cache holds is primed, so no primed entry is evicted before use.
         """
+        if self.regex_only:
+            return
         langs = self._langs(language)
         limit = self.config.analysis_cache_size // max(len(langs), 1)
         unique = list(dict.fromkeys(t for t in texts if t.strip()))[:limit]

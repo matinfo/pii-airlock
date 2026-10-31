@@ -68,6 +68,24 @@ hook_on_error: closed
 # Larger files are treated like a detection failure (see hook_on_error).
 hook_max_file_bytes: 2000000
 
+# Hooks start a new process per tool call, and loading the spaCy models takes
+# 0.5-3 s each time. The daemon keeps them loaded (Unix socket in a user-only
+# directory; nothing leaves the machine):
+#   auto -> use the daemon, starting it in the background when it is not running
+#   off  -> always analyze in the hook process
+# Not available on Windows (hooks analyze in-process there).
+hook_daemon: auto
+
+# The daemon exits after this many idle minutes, freeing the models' memory.
+# 0 = never.
+hook_daemon_idle_minutes: 30
+
+# How a hook analyzes when no daemon answers (e.g. while it starts):
+#   inprocess -> load the models in the hook (complete, slow)
+#   regex     -> patterns only: emails, phones, IBAN, cards, IPs, IDs, secrets and
+#                your deny_list, in milliseconds; names and places are NOT detected
+hook_fallback: inprocess
+
 # The gateway refuses request bodies it does not know how to scrub (fail closed).
 # List path fragments ("<provider>/<path>") whose bodies may be forwarded raw,
 # e.g. endpoints you know carry no personal data:

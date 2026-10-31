@@ -70,6 +70,9 @@ pii-airlock install-hook --scope user
 | PII in a text file Claude reads (content is scanned) | `PreToolUse` |
 | PII in a shell command, edit, search, URL or MCP call | `PreToolUse` |
 
+> Hooks stay fast: the first call starts a background daemon that keeps the models
+> loaded (`pii-airlock daemon status`), so later calls take ~60 ms instead of seconds.
+
 > Hooks cannot see tool *output* (e.g. what `cat` prints) or binary files. Detection
 > failures fail closed (treated as PII) unless `hook_on_error: open`.
 

@@ -4,6 +4,9 @@ Both hooks read the event JSON from stdin, run PII detection over the relevant
 text, and print a decision JSON to stdout. They never rewrite the payload (the
 hook API can't reliably do that) — they surface PII so the user can decide.
 
+Detection runs in the hook daemon when one answers (models stay loaded between
+calls), else in this process (see ``hook_daemon`` / ``hook_fallback``).
+
 Fail closed: if detection itself fails (missing spaCy model, unreadable file),
 the input is treated as containing PII unless ``hook_on_error: open``.
 """
@@ -16,8 +19,9 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from pii_scrub import daemon
 from pii_scrub.config import Config, load_config
-from pii_scrub.engine import ScrubEngine, apply_detections
+from pii_scrub.engine import Detection, ScrubEngine, apply_detections
 from pii_scrub.mapping import Mapping
 
 # Tool-input fields worth scanning, per tool name. `Read` is special-cased: the
@@ -139,14 +143,27 @@ def _read_file_text(tool_input: dict, cwd: str | None, config: Config) -> str | 
     return text
 
 
-def _detect_types(engine: ScrubEngine, texts: list[str]) -> Counter:
+def _analyze(config: Config, event: dict, texts: list[str]) -> list[tuple[str, list[Detection]]]:
+    """(chunk, detections) for every chunk of `texts`, via the daemon if it answers."""
     chunks = [c for text in texts if text and text.strip() for c in _chunks(text)]
+    if not chunks:
+        return []
+    cwd = event.get("cwd") or None
+    if config.hook_daemon != "off":
+        found = daemon.detect(cwd, chunks)  # DaemonError: detection failed, fail closed
+        if found is not None:
+            return [(chunk, [Detection(*d) for d in dets])
+                    for chunk, dets in zip(chunks, found, strict=True)]
+        if config.hook_daemon == "auto":
+            with contextlib.suppress(OSError):
+                daemon.spawn(cwd)  # ready for the next call; this one runs here
+    engine = ScrubEngine(config, regex_only=config.hook_fallback == "regex")
     engine.prime(chunks)
-    found: Counter = Counter()
-    for chunk in chunks:
-        for det in engine.detect(chunk):
-            found[det.entity_type] += 1
-    return found
+    return [(chunk, engine.detect(chunk)) for chunk in chunks]
+
+
+def _types(results: list[tuple[str, list[Detection]]]) -> Counter:
+    return Counter(d.entity_type for _, dets in results for d in dets)
 
 
 # Shown with every detection so a false positive costs one command to fix.
@@ -195,7 +212,7 @@ def run_pre_tool_use() -> None:
                 raise config_error
             if texts is None:
                 return  # tool not relevant; no decision -> allow
-            found = _detect_types(ScrubEngine(config), texts)
+            found = _types(_analyze(config, event, texts))
     except _FAILURES as exc:
         if config.hook_on_error == "open":
             return
@@ -228,14 +245,11 @@ def run_user_prompt_submit() -> None:
         with _quiet():
             if config_error is not None:
                 raise config_error
-            engine = ScrubEngine(config)
-            if len(prompt) <= _CHUNK_CHARS:
-                detections = engine.detect(prompt)
-                found = Counter(d.entity_type for d in detections)
-                scrubbed = apply_detections(prompt, detections, Mapping())
-            else:  # long paste: count only (offsets would span chunks)
-                found = _detect_types(engine, [prompt])
-                scrubbed = None
+            results = _analyze(config, event, [prompt])
+            found = _types(results)
+            scrubbed = None
+            if len(results) == 1:  # long pastes are chunked: count only
+                scrubbed = apply_detections(prompt, results[0][1], Mapping())
     except _FAILURES as exc:
         if config.hook_on_error == "open":
             return

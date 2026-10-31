@@ -247,6 +247,25 @@ The hooks **detect and block/ask** — they don't silently rewrite payloads (the
 - If detection can't run (e.g. missing spaCy model), the hooks **fail closed**: the
   input is treated as containing PII. Set `hook_on_error: open` to skip checks instead.
 
+**Speed: the hook daemon.** Claude Code starts a new process for every hook call, and
+loading the spaCy models costs 0.5–3 s each time. With the default `hook_daemon: auto`,
+the first hook call starts a small background daemon that keeps the models loaded;
+later calls answer in ~60 ms. It listens on a Unix socket (mode 0600, in a directory
+only you can write to), reloads your project policy on every call, and exits after
+`hook_daemon_idle_minutes` (30) idle. Nothing leaves your machine.
+
+```bash
+pii-airlock daemon status     # also shown by `pii-airlock doctor`
+pii-airlock daemon start      # warm it up now (e.g. from your shell profile)
+pii-airlock daemon stop
+```
+
+While no daemon answers, hooks analyze in-process (`hook_fallback: inprocess`). With
+`hook_fallback: regex` they use patterns only, in milliseconds: emails, phones, IBANs,
+cards, IPs, FR/CH IDs, secrets and your `deny_list` — **names and places are not
+detected** in that mode. `hook_daemon: off` disables the daemon. Windows: no daemon
+(hooks analyze in-process).
+
 **Not covered by hooks:** the *output* of a command or tool (e.g. `cat` in Bash, Grep
 matches, a fetched web page) reaches the model unchecked, as do binary files (images,
 PDFs). For full coverage, route the traffic through the gateway.
@@ -279,6 +298,8 @@ exclude_entities: [DATE_TIME, URL, NRP, US_DRIVER_LICENSE, US_BANK_NUMBER,
 score_thresholds: {}  # per-entity minimum, e.g. {PERSON: 0.7}
 builtin_recognizers: true  # FR/CH IDs, FR/CH phone formats, secrets (see below)
 analysis_cache_size: 2048  # texts remembered per language (digest + offsets, never the text); 0 = off
+hook_daemon: auto          # keep models loaded between hook calls (off: never)
+hook_fallback: inprocess   # no daemon answer: load models (inprocess) or patterns only (regex)
 hook_decision: ask    # tool calls: ask (surface + confirm) | deny (block)
 prompt_decision: block  # prompts: block (show scrubbed version) | warn (send anyway)
 hook_on_error: closed   # detection failure: closed (treat as PII) | open (skip)

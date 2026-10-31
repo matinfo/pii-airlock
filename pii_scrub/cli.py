@@ -23,6 +23,10 @@ app = typer.Typer(
 )
 hook_app = typer.Typer(help="Claude Code hook entry points (read JSON from stdin).")
 app.add_typer(hook_app, name="hook")
+daemon_app = typer.Typer(
+    help="Hook daemon: keeps the models loaded so hooks answer in milliseconds."
+)
+app.add_typer(daemon_app, name="daemon")
 policy_app = typer.Typer(help="Per-project PII policy (Claude Code SKILL.md).",
                          no_args_is_help=True)
 app.add_typer(policy_app, name="policy")
@@ -371,6 +375,7 @@ def doctor() -> None:
             mapping_ok,
             "ok",
         ),
+        ("hook daemon", True, _daemon_status(config)),
     ]
 
     failed = False
@@ -541,6 +546,59 @@ def hook_user_prompt_submit() -> None:
     from .hooks._common import run_user_prompt_submit
 
     run_user_prompt_submit()
+
+
+def _daemon_status(config) -> str:
+    from . import daemon
+
+    if not daemon.SUPPORTED:
+        return "unsupported on this OS (hooks analyze in-process)"
+    if config.hook_daemon == "off":
+        return "off (hook_daemon: off)"
+    reply = daemon.call({"op": "ping"}, timeout=2.0)
+    if reply is not None:
+        return f"running (pid {reply.get('pid')}, socket {daemon.socket_path()})"
+    return "not running (starts on the next hook call)"
+
+
+@daemon_app.command("start")
+def daemon_start() -> None:
+    """Start the daemon in the background and wait until it answers."""
+    from . import daemon
+
+    if not daemon.SUPPORTED:
+        typer.echo("The hook daemon needs Unix sockets (not available here).", err=True)
+        raise typer.Exit(code=1)
+    if daemon.call({"op": "ping"}, timeout=2.0) is None:
+        daemon.spawn(str(Path.cwd()))
+    reply = daemon.wait_until_up(10)
+    if reply is None:
+        typer.echo(f"Daemon did not start; see {daemon.log_path()}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"Daemon running (pid {reply.get('pid')}); models load in the background.")
+
+
+@daemon_app.command("stop")
+def daemon_stop() -> None:
+    """Stop the running daemon."""
+    from . import daemon
+
+    reply = daemon.call({"op": "stop"}, timeout=2.0)
+    typer.echo("Daemon stopped." if reply is not None else "No daemon running.")
+
+
+@daemon_app.command("status")
+def daemon_status() -> None:
+    """Show whether the daemon is running."""
+    typer.echo(_daemon_status(_build_config(None, None)))
+
+
+@daemon_app.command("run")
+def daemon_run() -> None:
+    """Run the daemon in the foreground (for launchd/systemd or debugging)."""
+    from . import daemon
+
+    raise typer.Exit(code=daemon.serve(str(Path.cwd())))
 
 
 if __name__ == "__main__":

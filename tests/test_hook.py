@@ -3,6 +3,8 @@
 import io
 import json
 
+import pytest
+
 import pii_scrub.hooks._common as common
 from pii_scrub.config import Config
 from pii_scrub.engine import Detection
@@ -34,6 +36,15 @@ class BrokenEngine:
 
     def detect(self, text, language=None):
         raise OSError("Can't find model 'en_core_web_lg'")
+
+
+@pytest.fixture(autouse=True)
+def no_daemon(monkeypatch):
+    """Never reach (or start) a real daemon; record spawn attempts."""
+    spawned = []
+    monkeypatch.setattr(common.daemon, "detect", lambda cwd, texts: None)
+    monkeypatch.setattr(common.daemon, "spawn", lambda cwd=None: spawned.append(cwd))
+    return spawned
 
 
 def _run(fn, event, monkeypatch, capsys, engine=FakeEngine, **config):
@@ -222,3 +233,57 @@ def test_hooks_invalid_policy_fails_closed(tmp_path, monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["decision"] == "block"
     assert "invalid YAML" in payload["reason"]
+
+
+def test_daemon_answer_is_used_without_loading_an_engine(monkeypatch, capsys, no_daemon):
+    def daemon_detect(cwd, texts):
+        assert cwd == "/proj"
+        return [[("EMAIL_ADDRESS", 5, 17, 1.0)] if "jean@acme.fr" in t else [] for t in texts]
+
+    monkeypatch.setattr(common.daemon, "detect", daemon_detect)
+    out = _run(common.run_user_prompt_submit, {"cwd": "/proj", "prompt": "mail jean@acme.fr"},
+               monkeypatch, capsys, engine=BrokenEngine)
+    payload = json.loads(out)
+    assert payload["decision"] == "block"
+    assert "mail <EMAIL_ADDRESS_1>" in payload["reason"]
+    assert no_daemon == []
+
+
+def test_no_daemon_spawns_one_and_analyzes_in_process(monkeypatch, capsys, no_daemon):
+    event = {"cwd": "/proj", "tool_name": "Bash", "tool_input": {"command": "echo jean@acme.fr"}}
+    out = _run(common.run_pre_tool_use, event, monkeypatch, capsys)
+    assert "EMAIL_ADDRESS" in out
+    assert no_daemon == ["/proj"]
+
+
+def test_daemon_off_neither_asks_nor_spawns(monkeypatch, capsys, no_daemon):
+    def fail(cwd, texts):  # pragma: no cover - must not be called
+        raise AssertionError("daemon used")
+
+    monkeypatch.setattr(common.daemon, "detect", fail)
+    _run(common.run_pre_tool_use, {"tool_name": "Bash", "tool_input": {"command": "echo hi"}},
+         monkeypatch, capsys, hook_daemon="off")
+    assert no_daemon == []
+
+
+def test_daemon_detection_error_fails_closed(monkeypatch, capsys):
+    def broken(cwd, texts):
+        raise common.daemon.DaemonError("spaCy model(s) not installed: en_core_web_lg.")
+
+    monkeypatch.setattr(common.daemon, "detect", broken)
+    out = _run(common.run_pre_tool_use, {"tool_name": "Bash", "tool_input": {"command": "ls"}},
+               monkeypatch, capsys)
+    hso = json.loads(out)["hookSpecificOutput"]
+    assert hso["permissionDecision"] == "ask"
+    assert "not installed" in hso["permissionDecisionReason"]
+
+
+def test_regex_fallback_finds_patterns_without_models(monkeypatch, capsys):
+    from pii_scrub.engine import ScrubEngine
+
+    monkeypatch.setattr(common, "ScrubEngine", ScrubEngine)
+    monkeypatch.setattr(common, "load_config", lambda **_k: Config(hook_fallback="regex"))
+    monkeypatch.setattr(common.sys, "stdin", io.StringIO(json.dumps(
+        {"tool_name": "Bash", "tool_input": {"command": "curl -d to=jean@acme.fr x"}})))
+    common.run_pre_tool_use()  # would raise on a missing model if it loaded spaCy
+    assert "EMAIL_ADDRESS" in capsys.readouterr().out
