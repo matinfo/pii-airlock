@@ -12,7 +12,7 @@ import pii_scrub.cli as cli
 
 def _fake_config(models: dict[str, str], languages: list[str] | None = None) -> SimpleNamespace:
     return SimpleNamespace(models=models, languages=languages or list(models.keys()),
-                           hook_daemon="off")
+                           hook_daemon="off", ner_backend="spacy")
 
 
 def _capture_echo(monkeypatch) -> list[tuple[str, bool]]:

@@ -42,6 +42,14 @@ score_thresholds: {}
 # formats, API keys / passwords as SECRET). Checksum-validated, every language.
 builtin_recognizers: true
 
+# Which model finds names, organizations and places:
+#   spacy  -> one spaCy model per language (`models:` above)
+#   gliner -> one multilingual GLiNER model for every language; needs
+#             pip install 'pii-airlock[gliner]' (PyTorch, ~1 GB model download)
+# Emails, phones, IDs and secrets are found by patterns with either backend.
+ner_backend: spacy
+gliner_model: urchade/gliner_multi_pii-v1
+
 # How many analyzed texts (per language) are remembered, so text seen again,
 # e.g. the conversation history resent by chat clients on every turn, is not
 # analyzed again. Only a digest of each text and the detected offsets are kept,

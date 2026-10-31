@@ -159,7 +159,7 @@ class _Engines:
         from .engine import ScrubEngine
 
         key = (tuple(config.languages), tuple(sorted(config.models.items())),
-               config.analysis_cache_size)
+               config.ner_backend, config.gliner_model, config.analysis_cache_size)
         with self._lock:  # one model load at a time, never twice
             base = self._base.get(key)
             if base is None:

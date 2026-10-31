@@ -4,6 +4,7 @@
     python -m tests.eval.run_eval --gate          # exit 1 if below thresholds.json
     python -m tests.eval.run_eval -v              # also list misses and false positives
     python -m tests.eval.run_eval --models en=en_core_web_lg,fr=fr_core_news_lg
+    python -m tests.eval.run_eval --backend gliner   # needs pii-airlock[gliner]
 
 The corpus (corpus.jsonl) holds only fake data. Each case lists the PII values
 that appear in its text; every occurrence of a value is a gold span.
@@ -85,9 +86,10 @@ def available_models(models: dict[str, str]) -> dict[str, str]:
     return {lang: m for lang, m in models.items() if find_spec(m) is not None}
 
 
-def evaluate(cases: list[dict], models: dict[str, str]) -> Report:
-    models = available_models(models)
-    engine = ScrubEngine(Config(languages=list(models), models=models))
+def evaluate(cases: list[dict], models: dict[str, str], backend: str = "spacy") -> Report:
+    if backend == "spacy":
+        models = available_models(models)
+    engine = ScrubEngine(Config(languages=list(models), models=models, ner_backend=backend))
     report = Report()
     for case in cases:
         text = case["text"]
@@ -155,16 +157,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gate", action="store_true", help="exit 1 if below thresholds.json")
     ap.add_argument("-v", "--verbose", action="store_true", help="list misses and extras")
     ap.add_argument("--models", help="lang=model pairs, e.g. en=en_core_web_lg,fr=fr_core_news_lg")
+    ap.add_argument("--backend", choices=["spacy", "gliner"], default="spacy")
     args = ap.parse_args(argv)
 
     models = dict(SMALL_MODELS)
     if args.models:
         models = dict(pair.split("=", 1) for pair in args.models.split(","))
     missing = sorted(set(models) - set(available_models(models)))
-    if missing:
+    if missing and args.backend == "spacy":
         print(f"warning: models not installed for {missing}; those cases are scored anyway",
               file=sys.stderr)
-    report = evaluate(load_corpus(), models)
+    report = evaluate(load_corpus(), models, args.backend)
     print(format_report(report, args.verbose))
     if args.gate:
         failures = check_gate(report, json.loads(THRESHOLDS.read_text("utf-8")))

@@ -224,6 +224,18 @@ def _inject_hint(models: list[str]) -> None:
             )
 
 
+def _download_gliner(model: str) -> None:
+    from .gliner_backend import load_model
+
+    typer.echo(f"Downloading GLiNER model {model} ...", err=True)
+    try:
+        load_model(model)  # fetched into the Hugging Face cache
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Done.", err=True)
+
+
 def _configured_models(config: object) -> list[str]:
     return [config.models[lc] for lc in config.languages if lc in config.models]
 
@@ -250,8 +262,11 @@ def _env_export_examples(host: str, port: int) -> list[str]:
 def download_models(
     lang: str | None = typer.Option(None, "--lang", help="Languages, e.g. 'fr,en'."),
 ) -> None:
-    """Download the spaCy models configured for the selected languages."""
+    """Download the models configured for the selected languages."""
     config = _build_config(lang, None)
+    if config.ner_backend == "gliner":
+        _download_gliner(config.gliner_model)
+        return
     models = _configured_models(config)
     if not models:
         typer.echo("No models configured.", err=True)
@@ -350,8 +365,13 @@ def init(
 def doctor() -> None:
     """Health checks for a local pii-airlock installation."""
     config = _build_config(None, None)
-    models = _configured_models(config)
-    missing_models = [m for m in models if not _model_installed(m)]
+    if config.ner_backend == "gliner":
+        models = [f"{config.gliner_model} (GLiNER)"]
+        missing_models = ([] if importlib.util.find_spec("gliner")
+                          else ["gliner package: pip install 'pii-airlock[gliner]'"])
+    else:
+        models = _configured_models(config)
+        missing_models = [m for m in models if not _model_installed(m)]
     missing_deps = _missing_proxy_deps()
     has_pip = _has_pip()
     m = Mapping()

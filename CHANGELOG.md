@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- `ner_backend: gliner`: one multilingual GLiNER model (`gliner_model`, default
+  `urchade/gliner_multi_pii-v1`) instead of a spaCy model per language; extra
+  `pii-airlock[gliner]`, model fetched by `download-models`, shown in `doctor`. Long
+  texts scanned in overlapping windows; patterns keep emails/phones/IDs. On the eval
+  corpus: PERSON precision 0.95 (spaCy sm 0.68), overall 0.98 (0.67), recall 1.00.
+- Eval harness: `--backend gliner`.
 - Surrogate mode (`token_style: surrogate`): realistic, stable fakes instead of tokens
   (`Jasper Iverson`, `jasper.iverson@example.com`, same-shape phones, Luhn-valid cards,
   checksum-valid IBANs, RFC 5737 IPs), restored in responses, streams (fakes split

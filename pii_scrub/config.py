@@ -59,6 +59,8 @@ class Config:
     score_thresholds: dict[str, float] = field(default_factory=dict)
     builtin_recognizers: bool = True
     analysis_cache_size: int = 2048
+    ner_backend: str = "spacy"
+    gliner_model: str = "urchade/gliner_multi_pii-v1"
     hook_decision: str = "ask"
     prompt_decision: str = "block"
     hook_on_error: str = "closed"

@@ -53,6 +53,13 @@ class ScrubEngine:
 
     @cached_property
     def _analyzer(self):
+        backend = self.config.ner_backend
+        if backend == "gliner":
+            from .gliner_backend import build_analyzer
+
+            return build_analyzer(self.config)
+        if backend != "spacy":
+            raise ValueError(f"ner_backend must be spacy or gliner, not {backend!r}")
         # Imported lazily so that `--help` and config-only paths stay fast.
         from presidio_analyzer import AnalyzerEngine
         from presidio_analyzer.nlp_engine import NlpEngineProvider
@@ -162,6 +169,8 @@ class ScrubEngine:
         return [Detection(t, s, e, score) for (t, s, e), score in best.items()]
 
     def _langs(self, language: str | None) -> list[str]:
+        if self.config.ner_backend == "gliner":
+            return self.config.languages[:1]  # one multilingual model: one pass
         return [language] if language else (self.languages or self.config.languages[:1])
 
     def _cache_key(self, text: str, lang: str) -> tuple:

@@ -393,6 +393,35 @@ models:
   de: de_core_news_lg
 ```
 
+### One multilingual model (GLiNER)
+
+Instead of a spaCy model per language, [GLiNER](https://github.com/urchade/GLiNER)
+(`urchade/gliner_multi_pii-v1`) finds people, organizations and places in any language
+with one model. Emails, phones, IDs and secrets are still found by patterns.
+
+```bash
+pipx inject pii-airlock 'pii-airlock[gliner]'   # or: pip install 'pii-airlock[gliner]' (PyTorch)
+pii-airlock download-models                     # with ner_backend: gliner, fetches the ~1.1 GB model
+```
+
+```yaml
+ner_backend: gliner
+```
+
+On the bundled EN+FR eval corpus (`python -m tests.eval.run_eval --backend gliner`):
+
+| | spaCy `_sm` models | GLiNER |
+|---|---|---|
+| PERSON recall / precision | 0.96 / 0.68 | 1.00 / 0.95 |
+| All entities, precision | 0.67 | 0.98 |
+| Time per message (CPU) | ~6 ms | ~40 ms |
+
+Fewer false positives means fewer needless hook prompts. Long texts are scanned in
+overlapping windows (GLiNER itself truncates past a few hundred words). Organizations
+and places must be capitalized to count, which drops common nouns GLiNER tags ("la
+société", "client"); names are kept in any case. With the hook daemon the model is
+loaded once.
+
 ---
 
 ## Guarantees & limitations
