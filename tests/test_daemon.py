@@ -170,7 +170,8 @@ def test_tcp_request_without_the_token_is_refused(tcp):
 def test_tcp_server_proves_the_token_without_revealing_it(tcp):
     info = json.loads(tcp.read_text())
     (reply,) = _raw(info["port"], {"hello": "abc"})
-    assert reply["proof"] == daemon._proof(info["token"], "abc")
+    assert reply["proof"] == daemon._proof(info["token"], "abc", info["port"])
+    assert reply["proof"] != daemon._proof(info["token"], "abc", info["port"] + 1)
     assert info["token"] not in json.dumps(reply)
 
 
@@ -200,6 +201,37 @@ def test_client_sends_no_text_to_a_port_squatter(tcp, monkeypatch):
     thread.join(5)
     squatter.close()
     assert b"jean@acme.fr" not in b"".join(received)
+
+
+def test_a_relayed_proof_is_rejected(tcp):
+    """A process on another port that forwards the hello to the real daemon (so it gets a
+    valid proof for *that* port) must not pass as the daemon, nor see the request."""
+    info = json.loads(tcp.read_text())
+    seen: list[bytes] = []
+    relay = socket.socket()
+    relay.bind(("127.0.0.1", 0))
+    relay.listen(1)
+
+    def forward_hello():
+        conn, _ = relay.accept()
+        with conn, socket.create_connection(("127.0.0.1", info["port"]), timeout=5) as real:
+            conn.settimeout(3)
+            hello = conn.recv(65536)
+            seen.append(hello)
+            real.sendall(hello)
+            conn.sendall(real.recv(65536))  # the real daemon's genuine proof
+            try:
+                seen.append(conn.recv(65536))  # the request, if the client were fooled
+            except OSError:
+                pass
+
+    thread = threading.Thread(target=forward_hello, daemon=True)
+    thread.start()
+    tcp.write_text(json.dumps({**info, "port": relay.getsockname()[1]}))
+    assert daemon.detect("/p", ["mail jean@acme.fr"]) is None
+    thread.join(5)
+    relay.close()
+    assert b"jean@acme.fr" not in b"".join(seen) and info["token"].encode() not in b"".join(seen)
 
 
 def test_tcp_info_file_with_garbage_means_no_daemon(tcp):

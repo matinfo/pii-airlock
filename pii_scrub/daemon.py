@@ -16,7 +16,7 @@ Protocol: one JSON object per line, each way.
     <- {"build": id, "detections": [[[entity, start, end, score], ...], ...]}
     <- {"build": id, "error": "message"}
     -> {"op": "ping"} / {"op": "stop"}
-    -> {"hello": nonce} <- {"proof": hmac(token, nonce)}      (TCP only; requests then
+    -> {"hello": nonce} <- {"proof": hmac(token, port:nonce)}  (TCP only; requests then
        carry "token")
 The config of `cwd` is loaded for every request, so policy edits apply at once;
 projects that use the same models share one loaded engine and its cache.
@@ -152,8 +152,11 @@ def _call_unix(message: dict, timeout: float) -> dict | None:
         return _exchange(sock, message)
 
 
-def _proof(token: str, nonce: str) -> str:
-    return hmac.new(token.encode(), nonce.encode(), "sha256").hexdigest()
+def _proof(token: str, nonce: str, port: int) -> str:
+    """What a server on `port` answers to `nonce`. The port is part of it so a proof cannot
+    be relayed: a process on another port that forwards the hello to the real daemon gets
+    a proof the client rejects."""
+    return hmac.new(token.encode(), f"{port}:{nonce}".encode(), "sha256").hexdigest()
 
 
 def _read_info() -> dict | None:
@@ -178,7 +181,7 @@ def _call_tcp(message: dict, timeout: float) -> dict | None:
             stream.write(json.dumps({"hello": nonce}).encode() + b"\n")
             stream.flush()
             proof = json.loads(stream.readline()).get("proof", "")
-            if not hmac.compare_digest(str(proof), _proof(info["token"], nonce)):
+            if not hmac.compare_digest(str(proof), _proof(info["token"], nonce, info["port"])):
                 return None
             stream.write(json.dumps({**message, "token": info["token"]},
                                     ensure_ascii=False).encode("utf-8") + b"\n")
@@ -291,7 +294,7 @@ class _Core:
     def dispatch(self, request: dict) -> dict:
         if self.token is not None:
             if "hello" in request:  # prove we hold the token, without sending it
-                return {"proof": _proof(self.token, str(request["hello"]))}
+                return {"proof": _proof(self.token, str(request["hello"]), self.server_address[1])}
             if not hmac.compare_digest(str(request.get("token", "")), self.token):
                 return {"error": "unauthorized"}
         return self.answer(request)
