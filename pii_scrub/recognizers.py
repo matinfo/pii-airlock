@@ -84,6 +84,10 @@ RULES: tuple[Rule, ...] = (
     # A bare 9-digit number passes Luhn 1 time in 10: require the keyword.
     Rule("FR_SIREN", _rx(r"\bSIREN\b\W{0,5}(\d{3} ?\d{3} ?\d{3})(?![\w])", re.I),
          score=0.85, validate=_valid_luhn, group=1),
+    # International format in any language: Presidio scores a bare number 0.4 and
+    # only boosts it on English context words, so "Rufen Sie ... +49 30 ..." leaked.
+    Rule("PHONE_NUMBER", _rx(r"(?<![\w+])\+\d{1,3}(?:[ .\-]?\(?\d{1,4}\)?){2,5}(?![\w])"),
+         score=0.7, validate=lambda m: 8 <= len(_digits(m)) <= 15),
     # National formats Presidio's phone recognizer (US/UK/DE/... regions) misses.
     Rule("PHONE_NUMBER",
          _rx(r"(?<![\w+])(?:\+33 ?(?:\(0\) ?)?|0033 ?|0)[1-9](?:[ .\-]?\d{2}){4}(?![\w])"),

@@ -362,3 +362,11 @@ def test_propagation_regex_is_compiled_once_for_many_texts():
     texts = [f"msg {i}: Dupont wrote to Jean Dupont" for i in range(50)]
     eng.scrub_all(lambda f: [f(t) for t in texts], Mapping())
     assert engine_mod._propagation_regex.cache_info().misses <= 2
+
+
+def test_phone_inside_an_iban_is_not_reported_separately(monkeypatch):
+    text = "IBAN DE89 3704 0044 0532 0130 00"
+    engine = ScrubEngine()
+    monkeypatch.setattr(engine, "_model_findings", lambda t, lang: (
+        ("IBAN_CODE", 5, 32, 1.0), ("PHONE_NUMBER", 20, 32, 0.8)))
+    assert [d.entity_type for d in engine.detect(text)] == ["IBAN_CODE"]

@@ -75,3 +75,11 @@ def test_engine_merges_builtin_and_respects_exclusions():
     assert [d.entity_type for d in engine().detect(text)] == ["CH_AHV"]
     assert engine(exclude_entities=["CH_AHV"]).detect(text) == []
     assert engine(builtin_recognizers=False).detect(text) == []
+
+
+@pytest.mark.parametrize("text,value", [
+    ("Rufen Sie mich unter +49 30 901820 an.", "+49 30 901820"),
+    ("Chiamami al +39 02 8645 7391 domani.", "+39 02 8645 7391"),
+])
+def test_international_phone_without_english_context(text, value):
+    assert ("PHONE_NUMBER", value) in _found(text)
