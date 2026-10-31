@@ -23,6 +23,7 @@ from typing import Any
 import yaml
 
 from .policy import normalize_deny, read_policy, skill_path
+from .trust import is_trusted, tighten_only
 
 # Shipped inside the package so it is always found, however pii-airlock is installed.
 _DEFAULT_FILE = Path(__file__).resolve().parent / "config.default.yaml"
@@ -78,6 +79,8 @@ class Config:
     deny_list: dict[str, list[str]] = field(default_factory=dict)
     custom_patterns: list[dict[str, Any]] = field(default_factory=list)
     entity_actions: dict[str, str] = field(default_factory=dict)
+    # Project-config settings not applied because the project is not trusted.
+    ignored_project_keys: list[str] = field(default_factory=list)
 
     def action_for(self, entity_type: str) -> str:
         """What to do with a detected entity: tokenize, redact, allow or block.
@@ -164,8 +167,17 @@ def load_config(
     cfg = Config().merged_with(_read_yaml(_DEFAULT_FILE))
     cfg = cfg.merged_with(_read_yaml(_USER_FILE))
     cfg = cfg.merged_with(read_policy(skill_path("user")))
-    cfg = cfg.merged_with(_read_yaml(project / _PROJECT_NAME))
-    cfg = cfg.merged_with(read_policy(skill_path("project", project)))
+    layers = [_read_yaml(project / _PROJECT_NAME), read_policy(skill_path("project", project))]
+    if is_trusted(project):
+        for layer in layers:
+            cfg = cfg.merged_with(layer)
+    else:
+        ignored: list[str] = []
+        for layer in layers:
+            safe, dropped = tighten_only(layer)
+            cfg = cfg.merged_with(safe)
+            ignored += dropped
+        cfg = replace(cfg, ignored_project_keys=sorted(set(ignored)))
     if overrides:
         cfg = cfg.merged_with(overrides)
     return cfg

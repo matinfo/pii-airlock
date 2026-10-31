@@ -10,6 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-10-31
 
 ### Security
+- Project config is no longer blindly trusted. A cloned repo's `.pii-airlock.yaml` /
+  `SKILL.md` could ship `hook_on_error: open`, `entity_actions: {PERSON: allow}`,
+  `passthrough_paths` or `mapping_dir` and switch protections off. Until you trust the
+  project (`pii-airlock trust`; your own `allow` / `deny` / `action` edits keep a trusted
+  project trusted, a `git pull` that changes the files does not) only settings that
+  tighten apply: deny-list terms, custom patterns, `block`/`redact` actions, `deny` /
+  `block` / `closed` decisions. `policy show` lists what is ignored.
+- DOCX: footnotes, endnotes and comments that python-docx keeps as raw bytes are scrubbed
+  too, plus comment and tracked-change authors, field codes and hyperlink targets.
+- Propagation no longer blanks common words: a value found alone ("Will", "Server")
+  matches its exact spelling only; name parts still match in any case.
 - Header-profiled CSV columns now obey `entity_actions` (block / redact / allow); they used
   to be tokenized and stored in the mapping regardless. Redacted persons no longer reach
   surrogate fakes (and so the saved mapping).

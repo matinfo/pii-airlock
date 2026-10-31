@@ -89,3 +89,18 @@ def test_socket_in_a_dir_others_can_write_is_not_used(running, runtime):
         assert daemon.call({"op": "ping"}) is None
     finally:
         os.chmod(runtime, 0o700)
+
+
+def test_older_client_is_refused_without_stopping_the_daemon(running, monkeypatch):
+    real = daemon.build_id
+    monkeypatch.setattr(daemon, "build_id", lambda: "0.0.1+1")
+    assert daemon.detect(None, ["mail jean@acme.fr"]) is None
+    monkeypatch.setattr(daemon, "build_id", real)
+    assert daemon.call({"op": "ping"}) is not None        # still running
+    assert daemon.detect(None, ["mail jean@acme.fr"]) is not None
+
+
+def test_build_ordering():
+    key = daemon._build_key
+    assert key("0.3.0+5") > key("0.2.3+999") and key("0.3.0+6") > key("0.3.0+5")
+    assert key("0.10.0+1") > key("0.9.0+1") and key("garbage") < key("0.0.1+0")

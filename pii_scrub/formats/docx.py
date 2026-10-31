@@ -3,9 +3,11 @@
 Optional dependency: python-docx  (pip install 'pii-airlock[docx]')
 
 Covered: body, tables, text boxes, headers and footers, footnotes, endnotes,
-comments, tracked deletions, hyperlink text, and document properties. The
-author / last-modified-by properties are cleared outright (they identify a
-person but are too short for reliable detection).
+comments (including parts python-docx only keeps as raw bytes), tracked
+deletions, hyperlink text and targets (``mailto:`` ...), field codes, and
+document properties. Author names (document properties, comment and tracked
+change authors) are replaced outright: they identify a person but are too short
+for reliable detection.
 
 Text is scrubbed at paragraph granularity so that entities spanning multiple
 runs are still caught; when a paragraph changes, its text is collapsed into the
@@ -33,6 +35,8 @@ class DocxHandler(Handler):
         try:
             import docx  # type: ignore
             from docx.opc.part import XmlPart  # type: ignore
+            from docx.oxml import parse_xml  # type: ignore
+            from lxml import etree  # type: ignore
         except ImportError as exc:  # pragma: no cover - depends on install
             raise MissingExtra("docx", "python-docx") from exc
 
@@ -40,9 +44,21 @@ class DocxHandler(Handler):
         doc = docx.Document(io.BytesIO(self.raw))
 
         # Every XML part: document, headers, footers, footnotes, comments, ...
-        for part in doc.part.package.iter_parts():
+        package = doc.part.package
+        for part in package.iter_parts():
             if isinstance(part, XmlPart):
                 _scrub_element(part.element, scrub)
+            elif _is_word_xml(part):
+                # Loaded as raw bytes (python-docx has no class for it): parse,
+                # scrub and serialize back.
+                root = parse_xml(part.blob)
+                _scrub_element(root, scrub)
+                part._blob = etree.tostring(
+                    root, xml_declaration=True, encoding="UTF-8", standalone=True
+                )
+            for rel in part.rels.values():
+                if rel.is_external and rel.target_ref:  # hyperlink targets
+                    rel._target = scrub(rel.target_ref)
 
         props = doc.core_properties
         for name in _SCRUB_PROPS:
@@ -58,10 +74,24 @@ class DocxHandler(Handler):
         return out.getvalue()
 
 
+def _is_word_xml(part) -> bool:
+    content_type = getattr(part, "content_type", "") or ""
+    return (str(part.partname).endswith(".xml") and "wordprocessingml" in content_type
+            and hasattr(part, "_blob"))
+
+
 def _scrub_element(root, scrub: Scrubber) -> None:
     from docx.oxml.ns import qn  # type: ignore
 
     w_p, w_t, w_del = qn("w:p"), qn("w:t"), qn("w:delText")
+    for node in root.iter():
+        for attr in ("author", "initials"):  # comment / tracked-change authors
+            key = qn(f"w:{attr}")
+            if node.get(key):
+                node.set(key, "Author" if attr == "author" else "A")
+    for node in root.iter(qn("w:instrText")):  # field codes, e.g. HYPERLINK "mailto:..."
+        if node.text and node.text.strip():
+            node.text = scrub(node.text)
     for p in root.iter(w_p):
         # Only this paragraph's own text nodes; nested paragraphs (text boxes)
         # are visited on their own.

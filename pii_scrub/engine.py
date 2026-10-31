@@ -13,7 +13,7 @@ import threading
 from collections import Counter, OrderedDict
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, lru_cache
 from typing import TypeVar
 
 from .config import Config, load_config
@@ -372,19 +372,41 @@ def _name_parts(value: str) -> list[str]:
     ]
 
 
+@lru_cache(maxsize=16)
+def _propagation_regex(terms: tuple[tuple[str, bool], ...]) -> re.Pattern:
+    """One whole-word regex for (term, case_insensitive) pairs, longest first."""
+    def alt(items):
+        return "|".join(re.escape(t) for t in sorted(items, key=len, reverse=True))
+
+    folded = [t for t, ci in terms if ci]
+    exact = [t for t, ci in terms if not ci]
+    parts = ([f"(?i:{alt(folded)})"] if folded else []) + ([alt(exact)] if exact else [])
+    return re.compile(r"(?<!\w)(?:" + "|".join(parts) + r")(?!\w)")
+
+
 def _propagate(
     text: str, detections: list[Detection], known: Iterable[tuple[str, str]]
 ) -> list[Detection]:
-    """Find other mentions of values already detected (and of person-name parts)."""
-    terms: dict[str, tuple[str, float]] = {}
+    """Find other mentions of values already detected (and of person-name parts).
+
+    Case: parts of a multi-word person name and the full name match in any case
+    ("Dupont", "dupont", "DUPONT" after "Jean Dupont"). A value found alone
+    ("Will", "Server") matches its exact spelling only: NER false positives on
+    common words would otherwise blank out every "will" and "server" in the
+    request, code included.
+    """
+    terms: dict[tuple[str, bool], tuple[str, float]] = {}
 
     def add(entity: str, value: str, score: float) -> None:
         value = value.strip()
-        if len(value) >= _MIN_TERM and value.casefold() not in terms:
-            terms[value.casefold()] = (entity, score)
-        if entity == "PERSON":
+        if len(value) < _MIN_TERM:
+            return
+        multiword = entity == "PERSON" and len(value.split()) > 1
+        key = (value.casefold() if multiword else value, multiword)
+        terms.setdefault(key, (entity, score))
+        if multiword:
             for part in _name_parts(value):
-                terms.setdefault(part.casefold(), (entity, score))
+                terms.setdefault((part.casefold(), True), (entity, score))
 
     for d in detections:
         add(d.entity_type, text[d.start : d.end], d.score)
@@ -392,14 +414,15 @@ def _propagate(
         add(entity, value, 0.85)
     if not terms:
         return []
-    alternation = "|".join(re.escape(t) for t in sorted(terms, key=len, reverse=True))
-    rx = re.compile(r"(?<!\w)(?:" + alternation + r")(?!\w)", re.IGNORECASE)
+    rx = _propagation_regex(tuple(sorted(terms)))
+    lookup = {(t.casefold() if ci else t, ci): v for (t, ci), v in terms.items()}
     taken = [(d.start, d.end) for d in detections]
     out = []
     for m in rx.finditer(text):
         if any(m.start() < e and s < m.end() for s, e in taken):
             continue  # already detected
-        entity, score = terms[m.group(0).casefold()]
+        word = m.group(0)
+        entity, score = lookup.get((word.casefold(), True)) or lookup[(word, False)]
         out.append(Detection(entity, m.start(), m.end(), score))
     return out
 

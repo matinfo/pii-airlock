@@ -502,14 +502,26 @@ def _scope_path(scope: str) -> Path:
     return skill_path(scope)
 
 
-def _policy_change(fn, *args) -> bool:
-    from .policy import PolicyError
+def _policy_change(fn, path: Path, *args) -> bool:
+    """Run a policy edit; keep a trusted project trusted, never trust an unreviewed one."""
+    from .policy import PolicyError, skill_path
+    from .trust import is_trusted, trust
 
+    project = Path.cwd()
+    is_project = path == skill_path("project", project)
+    was_trusted = is_project and is_trusted(project)
     try:
-        return fn(*args)
+        changed = fn(path, *args)
     except PolicyError as exc:
         typer.echo(f"{exc}\nFix the policy block by hand, then retry.", err=True)
         raise typer.Exit(code=1) from None
+    if is_project and was_trusted:
+        trust(project)  # you just ran this: the files are yours
+    elif is_project:
+        typer.echo("Note: this project's pii-airlock config came with the repo and is not "
+                   "trusted, so settings that let more through are ignored. Review it, then "
+                   "run `pii-airlock trust`.", err=True)
+    return changed
 
 
 @policy_app.command("init")
@@ -521,11 +533,37 @@ def policy_init(
     from .policy import init_skill
 
     path = _scope_path(scope)
+    from .policy import skill_path
+    from .trust import is_trusted, trust
+
+    project = Path.cwd()
+    was_trusted = path == skill_path("project", project) and is_trusted(project)
     if init_skill(path, force=force):
+        if was_trusted:
+            trust(project)
         typer.echo(f"Created {path}")
         typer.echo("Next: pii-airlock allow \"Your Company\"  /  pii-airlock deny \"Client X\"")
     else:
         typer.echo(f"{path} already exists — nothing to do (use --force to overwrite).")
+
+
+@app.command()
+def trust() -> None:
+    """Trust this project's .pii-airlock.yaml and SKILL.md policy as they are now.
+
+    Project config can loosen protection (allow lists, `hook_on_error: open`...),
+    so a project that came with a repo only gets its tightening settings applied
+    until you have reviewed it and run this. Re-run it after config changes you
+    pulled in.
+    """
+    from . import trust as trust_mod
+
+    project = Path.cwd()
+    if not trust_mod.has_project_config(project):
+        typer.echo("No project config here — nothing to trust.")
+        return
+    trust_mod.trust(project)
+    typer.echo(f"Trusted the pii-airlock config of {project}")
 
 
 @policy_app.command("show")
@@ -546,6 +584,10 @@ def policy_show() -> None:
         typer.echo(f"custom pattern:  {pattern.get('entity')}  {pattern.get('regex')}")
     for entity, what in config.entity_actions.items():
         typer.echo(f"action {entity}: {what}")
+    if config.ignored_project_keys:
+        typer.echo("NOT TRUSTED project config: only settings that tighten protection apply; "
+                   f"ignored: {', '.join(config.ignored_project_keys)}. "
+                   "Review it, then run `pii-airlock trust`.")
     typer.echo(f"hook_decision: {config.hook_decision}   prompt_decision: "
                f"{config.prompt_decision}   hook_on_error: {config.hook_on_error}")
 

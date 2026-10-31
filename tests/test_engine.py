@@ -345,3 +345,20 @@ def test_redacted_persons_never_reach_surrogate_fakes():
     m = Mapping(b"k" * 32, surrogates=True)
     out = eng.scrub_all(lambda f: [f("Jean Dupont wrote")], m)
     assert out == ["[PERSON] wrote"] and "Dupont" not in str(m.to_dict())
+
+
+def test_single_word_false_positive_does_not_blank_the_common_word():
+    eng = _engine_finding("Will", entity="PERSON")
+    out = eng.scrub("Will you check? I will, and the Will file.", Mapping())
+    assert out.startswith("<PERSON_") and "I will," in out    # lower case untouched
+    assert out.count("<PERSON_") == 2                          # exact "Will" still follows
+
+
+def test_propagation_regex_is_compiled_once_for_many_texts():
+    from pii_scrub import engine as engine_mod
+
+    engine_mod._propagation_regex.cache_clear()
+    eng = _engine_finding("Jean Dupont")
+    texts = [f"msg {i}: Dupont wrote to Jean Dupont" for i in range(50)]
+    eng.scrub_all(lambda f: [f(t) for t in texts], Mapping())
+    assert engine_mod._propagation_regex.cache_info().misses <= 2

@@ -65,6 +65,15 @@ def build_id() -> str:
     return f"{__version__}+{newest}"
 
 
+def _build_key(build: object) -> tuple:
+    """Orderable form of a build id ("0.3.0+<mtime>"); unparsable sorts oldest."""
+    try:
+        version, _, mtime = str(build).partition("+")
+        return (tuple(int(p) for p in version.split(".")), int(mtime or 0))
+    except ValueError:
+        return ((), 0)
+
+
 def _is_private(path: Path, kind: int) -> bool:
     """`path` exists with file type `kind`, is ours, and no one else can write it."""
     try:
@@ -204,8 +213,13 @@ class _Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
             self.stop()
             return {"stopping": True}
         if request.get("build") != self.build:
-            self.stop()  # the package was upgraded: let a fresh daemon take over
-            return {"error": "pii-airlock daemon is running older code; restarting"}
+            # A newer client means the package was upgraded: step aside for a fresh
+            # daemon. An older one (another install) is just refused, so two
+            # installs never kill each other's daemon in turn.
+            if _build_key(request.get("build")) > _build_key(self.build):
+                self.stop()
+                return {"error": "pii-airlock daemon is running older code; restarting"}
+            return {"error": "pii-airlock daemon is running newer code; analyzing in-process"}
         texts = [t for t in request.get("texts", []) if isinstance(t, str)]
         engine = self.engines.get(load_config(cwd=request.get("cwd") or None))
         engine.prime(texts)

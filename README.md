@@ -381,6 +381,14 @@ custom_patterns:
 Hooks apply the policy of the project Claude Code is working in. Every detection
 message shows the one-command fix for a false positive.
 
+**Trust.** A project's policy comes with the repo, and a policy can loosen protection
+(`allow_list`, `hook_on_error: open`, `entity_actions: {PERSON: allow}`...). So for a
+project you have not trusted, only settings that **tighten** apply (deny-list terms,
+custom patterns, `block` / `redact`, `deny` / `block` / `closed` decisions). Your own
+`allow`, `deny`, `action` and `policy init` edits keep a trusted project trusted; after
+a `git pull` that changes the policy, review it and run `pii-airlock trust`.
+`pii-airlock policy show` says what is being ignored. User-level config is always trusted.
+
 #### What happens to each entity type
 
 By default every detected entity is **tokenized** (reversible). Choose per type:

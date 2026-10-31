@@ -2,7 +2,7 @@
 
 import pytest
 
-from pii_scrub import policy
+from pii_scrub import policy, trust
 from pii_scrub.config import Config, load_config
 from pii_scrub.engine import Detection, ScrubEngine
 from pii_scrub.mapping import Mapping
@@ -56,6 +56,7 @@ def test_load_config_layers_user_and_project_skills(tmp_path, monkeypatch):
     policy.add_allow(p, "Acme SA")
     policy.add_deny(p, "Phoenix")
     p.write_text(p.read_text().replace("deny_list:", "prompt_decision: warn\ndeny_list:"))
+    trust.trust(project)  # reviewed: loosening settings apply
 
     cfg = load_config(cwd=project)
     assert cfg.allow_list == ["Mathieu Meylan", "Acme SA"]  # accumulated
