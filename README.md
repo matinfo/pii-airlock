@@ -272,18 +272,6 @@ policy. The plugin cannot install the Python CLI, so install that first
 the plugin *or* `install-hook`, not both, or each call is scanned twice. The launcher is a
 POSIX shell script: on Windows use `install-hook`.
 
-### GitHub Copilot
-
-```bash
-pii-airlock install-hook --target copilot    # Copilot CLI / cloud agent / VS Code: .github/hooks/
-```
-
-Guards Copilot's tool calls (`preToolUse`). Copilot CLI also reads a repo's
-`.claude/settings.json`, so if you already ran `install-hook` for Claude Code, skip this (both
-would scan each call twice). Prompts cannot be blocked by a Copilot hook: to guard chat in VS Code,
-add your own model as a *Custom Endpoint* pointing at the gateway. Copilot's default models and
-inline suggestions cannot be covered. Details and the VS Code config: [AGENTS.md](AGENTS.md#github-copilot).
-
 ### With `install-hook`
 
 Register guardrails that intercept PII before it reaches the model:
@@ -332,6 +320,27 @@ detected** in that mode. `hook_daemon: off` disables the daemon. Windows: no dae
 **Not covered by hooks:** the *output* of a command or tool (e.g. `cat` in Bash, Grep
 matches, a fetched web page) reaches the model unchecked, as do binary files (images,
 PDFs). For full coverage, route the traffic through the gateway.
+
+---
+
+## GitHub Copilot
+
+```bash
+pii-airlock install-hook --target copilot    # writes .github/hooks/pii-airlock.json
+pii-airlock install-hook --target copilot --scope user   # ~/.copilot/hooks/ (all repos)
+```
+
+Guards Copilot's **tool calls** (`preToolUse`: shell commands, edits, file reads, web fetches, MCP
+calls) in the Copilot CLI, the cloud agent and VS Code agent mode.
+
+- **Already ran `pii-airlock install-hook` (project scope) for Claude Code?** Skip this: Copilot
+  CLI also reads the repo's `.claude/settings.json`, and both would scan each call twice. The
+  Claude Code *plugin* and `--scope user` do not write that file, so they do not reach Copilot.
+- **Chat in VS Code:** a hook cannot block prompts, so add your own model as a *Custom Endpoint*
+  that points at the gateway (config in [AGENTS.md](AGENTS.md#github-copilot)).
+- **Not covered:** Copilot's default models and inline suggestions.
+
+Written from GitHub's hook specs; not yet run against a live Copilot session.
 
 ---
 
