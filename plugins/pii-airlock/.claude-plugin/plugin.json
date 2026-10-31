@@ -1,0 +1,11 @@
+{
+  "name": "pii-airlock",
+  "displayName": "pii-airlock",
+  "version": "0.4.0",
+  "description": "Guards prompts, tool calls and files against personal data (PII) before they reach the model. Needs the pii-airlock CLI.",
+  "author": { "name": "matinfo", "url": "https://github.com/matinfo" },
+  "homepage": "https://github.com/matinfo/pii-airlock",
+  "repository": "https://github.com/matinfo/pii-airlock",
+  "license": "MIT",
+  "keywords": ["pii", "privacy", "gdpr", "hooks", "guardrail"]
+}
