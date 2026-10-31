@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-01
+
 ### Added
 - The hook daemon now runs on Windows too, so hooks take ~60 ms there instead of 0.5-3 s per call.
   It uses loopback TCP with a secret token (a file only the user can read); the client checks
@@ -249,7 +251,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-hook`.
 - Config override chain: bundled defaults → user → project → CLI flags.
 
-[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/matinfo/pii-airlock/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/matinfo/pii-airlock/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/matinfo/pii-airlock/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/matinfo/pii-airlock/compare/v0.2.3...v0.4.0
