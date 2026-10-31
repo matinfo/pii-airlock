@@ -193,40 +193,42 @@ class _Handler(socketserver.StreamRequestHandler):
         self.server.last_used = time.monotonic()
 
 
-class _Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
-    daemon_threads = True
+if SUPPORTED:  # socketserver.UnixStreamServer does not exist on Windows
 
-    def __init__(self, path: str) -> None:
-        super().__init__(path, _Handler)
-        self.build = build_id()
-        self.engines = _Engines()
-        self.last_used = time.monotonic()
+    class _Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        daemon_threads = True
 
-    def stop(self) -> None:
-        threading.Thread(target=self.shutdown, daemon=True).start()
+        def __init__(self, path: str) -> None:
+            super().__init__(path, _Handler)
+            self.build = build_id()
+            self.engines = _Engines()
+            self.last_used = time.monotonic()
 
-    def answer(self, request: dict) -> dict:
-        op = request.get("op")
-        if op == "ping":
-            return {"pid": os.getpid()}
-        if op == "stop":
-            self.stop()
-            return {"stopping": True}
-        if request.get("build") != self.build:
-            # A newer client means the package was upgraded: step aside for a fresh
-            # daemon. An older one (another install) is just refused, so two
-            # installs never kill each other's daemon in turn.
-            if _build_key(request.get("build")) > _build_key(self.build):
+        def stop(self) -> None:
+            threading.Thread(target=self.shutdown, daemon=True).start()
+
+        def answer(self, request: dict) -> dict:
+            op = request.get("op")
+            if op == "ping":
+                return {"pid": os.getpid()}
+            if op == "stop":
                 self.stop()
-                return {"error": "pii-airlock daemon is running older code; restarting"}
-            return {"error": "pii-airlock daemon is running newer code; analyzing in-process"}
-        texts = [t for t in request.get("texts", []) if isinstance(t, str)]
-        engine = self.engines.get(load_config(cwd=request.get("cwd") or None))
-        engine.prime(texts)
-        return {"detections": [
-            [[d.entity_type, d.start, d.end, d.score] for d in engine.detect(t)]
-            for t in texts
-        ]}
+                return {"stopping": True}
+            if request.get("build") != self.build:
+                # A newer client means the package was upgraded: step aside for a fresh
+                # daemon. An older one (another install) is just refused, so two
+                # installs never kill each other's daemon in turn.
+                if _build_key(request.get("build")) > _build_key(self.build):
+                    self.stop()
+                    return {"error": "pii-airlock daemon is running older code; restarting"}
+                return {"error": "pii-airlock daemon is running newer code; analyzing in-process"}
+            texts = [t for t in request.get("texts", []) if isinstance(t, str)]
+            engine = self.engines.get(load_config(cwd=request.get("cwd") or None))
+            engine.prime(texts)
+            return {"detections": [
+                [[d.entity_type, d.start, d.end, d.score] for d in engine.detect(t)]
+                for t in texts
+            ]}
 
 
 def serve(cwd: str | None = None) -> int:

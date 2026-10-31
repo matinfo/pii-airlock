@@ -46,7 +46,8 @@ def test_mapping_round_trip_keeps_stable_tokens(tmp_path):
 def test_master_key_is_created_once_and_private():
     key = tk.token_key(Config())
     path = tk.key_path()
-    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    if os.name == "posix":  # Windows does not report POSIX modes
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     tk._master_key.cache_clear()
     assert tk.token_key(Config()) == key
 
