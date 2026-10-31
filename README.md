@@ -72,6 +72,14 @@ pipx install "pii-airlock[proxy]"   # recommended (gateway included)
 pii-airlock init                    # guided setup (models + env hints)
 ```
 
+On macOS or Linux with [Homebrew](https://brew.sh/) (installs the CLI, hooks and gateway
+in their own virtualenv; the optional `gliner`, `docx` and `pdf` extras need pipx):
+
+```bash
+brew install matinfo/tap/pii-airlock
+pii-airlock download-models         # spaCy models, downloaded once
+```
+
 Latest from source (before a release lands on PyPI):
 
 ```bash
