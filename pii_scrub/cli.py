@@ -495,10 +495,23 @@ def proxy(
 def install_hook(
     event: str = typer.Option("both", "--event", help="both | tool | prompt"),
     scope: str = typer.Option("project", "--scope", help="project | user"),
+    target: str = typer.Option("claude", "--target", help="claude | copilot"),
 ) -> None:
-    """Register the Claude Code hook(s) in settings.json."""
-    from .hookinstall import install
+    """Register the Claude Code hook(s) in settings.json (or GitHub Copilot's hook file)."""
+    from .hookinstall import install, install_copilot
 
+    if target == "copilot":
+        if scope not in ("project", "user"):
+            typer.echo("--scope must be 'project' or 'user'", err=True)
+            raise typer.Exit(code=1)
+        path, changed = install_copilot(scope)
+        typer.echo(f"{'Installed' if changed else 'Already present:'} Copilot preToolUse hook "
+                   f"in {path}. Prompts are not hookable in Copilot: route chat through the "
+                   "gateway (see AGENTS.md).")
+        return
+    if target != "claude":
+        typer.echo("--target must be 'claude' or 'copilot'", err=True)
+        raise typer.Exit(code=1)
     try:
         path, added = install(event, scope)
     except ValueError as exc:

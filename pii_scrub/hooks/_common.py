@@ -68,9 +68,30 @@ def _quiet():
 
 def _read_event() -> dict:
     try:
-        return json.loads(sys.stdin.read() or "{}")
+        return _normalize(json.loads(sys.stdin.read() or "{}"))
     except json.JSONDecodeError:
         return {}
+
+
+def _normalize(event: dict) -> dict:
+    """Bring a GitHub Copilot hook payload (camelCase `toolName`/`toolArgs`, or the
+    snake_case alias, with the arguments possibly as a JSON string) to Claude Code's shape."""
+    if not isinstance(event, dict):
+        return {}
+    if {"toolName", "sessionId"} & event.keys():
+        event = {**event, "tool_name": event.get("toolName") or "",
+                 "tool_input": event.get("toolArgs")}
+    # Copilot's `tool_input` (PascalCase events) can be the raw JSON string too.
+    args = event.get("tool_input")
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except ValueError:
+            args = {"raw": args}  # unparseable: still scanned as text
+        event = {**event, "tool_input": args}
+    if "tool_input" in event and not isinstance(event["tool_input"], dict):
+        event = {**event, "tool_input": {}}
+    return event
 
 
 def _load_config(event: dict) -> tuple[Config, BaseException | None]:
@@ -187,18 +208,31 @@ def _emit(payload: dict) -> None:
     sys.stdout.write("\n")
 
 
+# Tools whose file content is what leaves the machine (Claude Code's Read, Copilot's view).
+_FILE_READERS = frozenset({"Read", "read", "view"})
+
+
 def _tool_texts(tool: str, tool_input: dict, event: dict, config: Config) -> list[str] | None:
-    """Strings to scan for this tool call, or None if the tool is not covered."""
-    if tool.startswith("mcp__"):
-        return _collect_strings(tool_input)  # MCP tools: every argument
+    """Strings to scan for this tool call, or None if the tool is not covered.
+
+    Claude Code's tools: the declared fields only (a file path is not content). MCP tools
+    and Copilot's tools (bash, edit, create, view, web_fetch, ... all lower case, unlike
+    Claude Code's): every argument, since their argument names are not ours to know. The
+    same goes for a known tool whose arguments carry none of the declared fields. Other
+    Claude Code tools (TodoWrite, Glob...) are not covered.
+    """
     fields = _TOOL_FIELDS.get(tool)
-    if fields is None:
+    if fields is None and not (tool.startswith("mcp__") or tool == tool.lower()):
         return None
-    texts: list[str] = []
-    for field in fields:
-        texts.extend(_collect_strings(tool_input.get(field)))
-    if tool == "Read":
-        content = _read_file_text(tool_input, event.get("cwd"), config)
+    if fields is None or not any(f in tool_input for f in fields):
+        texts = _collect_strings(tool_input)
+    else:
+        texts = []
+        for field in fields:
+            texts.extend(_collect_strings(tool_input.get(field)))
+    if tool in _FILE_READERS:
+        path = tool_input.get("file_path") or tool_input.get("path")
+        content = _read_file_text({**tool_input, "file_path": path}, event.get("cwd"), config)
         if content:
             texts.append(content)
     return texts
@@ -217,7 +251,7 @@ def run_pre_tool_use() -> None:
             if texts is not None and config_error is not None:
                 raise config_error
             if texts is None:
-                return  # tool not relevant; no decision -> allow
+                return  # tool not covered; no decision -> allow
             found = _types(_analyze(config, event, texts))
     except _FAILURES as exc:
         if config.hook_on_error == "open":
@@ -235,8 +269,12 @@ def run_pre_tool_use() -> None:
             decision = "deny"
             reason = (f"pii-airlock: {tool} input blocked by policy (entity_actions) — "
                       f"{_summary(blocked)}. Use a placeholder instead.")
+    # One reply for both harnesses: Claude Code reads the nested object and ignores the
+    # top-level keys (checked against the claude CLI); Copilot reads the top-level ones.
     _emit(
         {
+            "permissionDecision": decision,
+            "permissionDecisionReason": reason,
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": decision,
