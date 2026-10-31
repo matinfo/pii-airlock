@@ -14,10 +14,13 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import cached_property
+from typing import TypeVar
 
 from .config import Config, load_config
 from .mapping import Mapping
 from .recognizers import Finding, detect_builtin, detect_fallback
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -244,6 +247,30 @@ class ScrubEngine:
         replaced right-to-left so earlier offsets stay valid.
         """
         return apply_detections(text, self.detect(text, language, mapping.items()), mapping)
+
+    def scrub_all(
+        self,
+        run: Callable[[Callable[[str], str]], T],
+        mapping: Mapping,
+        texts: Iterable[str] | None = None,
+    ) -> T:
+        """Scrub every string `run` passes to its transform; return what `run` returns.
+
+        All strings are analyzed first (one batch), and every value found in any
+        of them is scrubbed in all of them: NER that finds "Jean Dupont" only in
+        the last message would otherwise leave "Dupont" in clear in the first.
+        `texts` are the strings `run` will pass, if already known; by default
+        `run` is dry-run once to list them, so it must have no side effects
+        (see collect_texts).
+        """
+        texts = list(dict.fromkeys(collect_texts(run) if texts is None else texts))
+        self.prime(texts)
+        known = list(dict.fromkeys(
+            (d.entity_type, d.text(t)) for t in texts for d in self.detect(t)
+        ))
+        return run(lambda t: apply_detections(
+            t, self.detect(t, known=[*known, *mapping.items()]), mapping
+        ))
 
 
 @dataclass

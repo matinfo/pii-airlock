@@ -262,3 +262,25 @@ def test_collect_texts_lists_transformed_strings():
                          {"role": "user", "content": [{"type": "text", "text": "yo"}]}]}
     texts = collect_texts(lambda f: scrub_payload(body, get_adapter("anthropic"), f))
     assert {"hi", "yo"} <= set(texts)
+
+
+def test_scrub_all_scrubs_values_found_later_in_earlier_texts():
+    eng = _engine_finding("Jean Dupont")
+    messages = ["Dupont asked for the file.", "OK.", "Signed: Jean Dupont"]
+    m = Mapping()
+    out = eng.scrub_all(lambda f: [f(t) for t in messages], m)
+    assert "Dupont" not in " ".join(out)
+    assert out[1] == "OK."
+    assert [m.restore(t) for t in out] == messages
+
+
+def test_scrub_all_uses_given_texts_without_a_dry_run():
+    eng = _engine_finding("Jean Dupont")
+    calls = []
+
+    def run(f):
+        calls.append(f)
+        return f("Dupont, from Jean Dupont")
+
+    out = eng.scrub_all(run, Mapping(), texts=["Dupont, from Jean Dupont"])
+    assert len(calls) == 1 and "Dupont" not in out

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
+- Gateway and `scrub` (CSV/JSON/DOCX): a value detected in one message (or cell) is now
+  scrubbed in every other one, *earlier* ones included. Before, "Jean Dupont" found
+  only in the last message left a bare "dupont" in an earlier message in clear.
 - Gateway: OpenAI **Responses API** (Codex CLI) requests were forwarded with PII in
   clear; `input`, `instructions`, function-call arguments and outputs are now scrubbed,
   and `output[]` / `response.*.delta` events restored.

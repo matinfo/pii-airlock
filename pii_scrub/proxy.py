@@ -66,11 +66,9 @@ def _is_generation_endpoint(adapter, path: str) -> bool:
 
 
 def _scrub_request(engine, payload: dict, adapter, mapping) -> dict:
-    """Scrub a request body, analyzing all its strings as one batch first."""
-    from .engine import collect_texts
-
-    engine.prime(collect_texts(lambda grab: scrub_payload(payload, adapter, grab)))
-    return scrub_payload(payload, adapter, lambda t: engine.scrub(t, mapping))
+    """Scrub a request body: all its strings are analyzed first, so a value found
+    in any message (or tool result) is scrubbed in every one, earlier ones too."""
+    return engine.scrub_all(lambda f: scrub_payload(payload, adapter, f), mapping)
 
 
 def _is_passthrough(config: Config, provider: str, path: str) -> bool:

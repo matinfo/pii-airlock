@@ -393,8 +393,11 @@ models:
 
 - **Reversibility is exact.** Any value the engine tokenized is restored byte-for-byte
   via the mapping. `restore(scrub(text))` round-trips for tokenized spans.
-- **Determinism.** The same value gets the same token within a mapping, so coreference
-  is preserved for the model.
+- **Determinism.** The same value gets the same token within a mapping (and, with stable
+  tokens, across requests), so coreference is preserved for the model.
+- **Found once, scrubbed everywhere.** A value detected anywhere in a request or file
+  — and the parts of a person's name — is scrubbed at every other mention, earlier ones
+  included, even where the model missed it.
 - **Tokens are opaque & safe.** Restored values are re-inserted through proper JSON
   encoding; values containing quotes, newlines or `<…>` won't corrupt payloads.
 - **Local-only detection.** Detection never makes a network call. Only the gateway

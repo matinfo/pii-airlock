@@ -101,18 +101,22 @@ def scrub(
 
     mapping = Mapping(token_key(config))
 
+    def run(transform):
+        return handler_cls(raw).scrub(transform, mapping.token_for)
+
     try:
-        texts: list[str] = []
         if handler_cls.many_texts and config.analysis_cache_size > 0:
             # Dry run with an identity tokenizer: lists the cells to analyze
             # (header-profiled columns need none) without minting tokens.
             texts = collect_texts(lambda grab: handler_cls(raw).scrub(grab, lambda _e, v: v))
             # One-shot process: hold the whole file's findings, not just the default.
             size = max(config.analysis_cache_size, len(texts) * len(config.languages))
-            config = replace(config, analysis_cache_size=size)
-        engine = ScrubEngine(config)
-        engine.prime(texts)
-        result = handler_cls(raw).scrub(lambda t: engine.scrub(t, mapping), mapping.token_for)
+            engine = ScrubEngine(replace(config, analysis_cache_size=size))
+            # A value found in any cell is scrubbed in every cell.
+            result = engine.scrub_all(run, mapping, texts)
+        else:
+            engine = ScrubEngine(config)
+            result = run(lambda t: engine.scrub(t, mapping))
     except MissingExtra as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None
