@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `pii-airlock scrub --encrypt-map` writes the mapping file encrypted (same scheme as the
+  gateway's file store); `restore --map` detects and opens it with the machine's key.
 - German and Italian identifiers: `DE_TAX_ID` (Steuer-IdNr., checksum + keyword), `DE_TAX_NUMBER`,
   and `IT_VAT_CODE` (`IT` prefix or `P.IVA` keyword, Luhn). National phone formats for
   Germany and Italy (`030 12345678`, `0170 1234567`, `06 12345678`, `333 1234567`).

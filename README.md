@@ -586,6 +586,10 @@ runs (the command prints the exact wheel URL in this case).
 - **Never commit mapping files.**
 - Delete them when you no longer need to restore.
 - Use `--no-map` when reversibility isn't required.
+- `scrub --encrypt-map` writes the file encrypted (AES-256-GCM, key derived from
+  `token.key` in your state directory); `restore --map` opens it with the same key
+  automatically. Opt-in because such a file is only restorable on this machine, and
+  only while `token.key` exists: keep `token.key` out of backups, never in the repo.
 - The gateway keeps its mapping in memory only and discards it after each response.
 
 ---
