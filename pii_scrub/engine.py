@@ -303,8 +303,8 @@ class ScrubEngine:
         found = [(t, d) for t in texts for d in self.detect(t)]
         self._check_blocked(d for _, d in found)  # before anything is minted
         known = list(dict.fromkeys((d.entity_type, d.text(t)) for t, d in found))
-        mapping.learn(known, texts)
         redacted = self._redacted()
+        mapping.learn([k for k in known if k[0] not in redacted], texts)
         return run(lambda t: apply_detections(
             t, self.detect(t, known=[*known, *mapping.items()]), mapping, redacted
         ))

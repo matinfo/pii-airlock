@@ -58,11 +58,11 @@ def test_engine_uses_gliner_once_per_text_with_ner_labels_only(fake_gliner):
     assert len(_FakeGliner.calls) == len(list(gb.windows(text)))  # one language pass
 
 
-def test_threshold_follows_the_lowest_configured_one(fake_gliner):
+def test_model_threshold_ignores_config(fake_gliner):
     cfg = Config(languages=["en"], ner_backend="gliner").merged_with(
         {"score_thresholds": {"PERSON": 0.35}})
     ScrubEngine(cfg).detect("hello Jean Dupont")
-    assert _FakeGliner.calls[0][2] == 0.35
+    assert _FakeGliner.calls[0][2] == gb.MODEL_FLOOR  # never the config's: shared analyzer
 
 
 def test_missing_package_explains_the_install(monkeypatch):

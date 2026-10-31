@@ -217,11 +217,11 @@ class _Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 
 def serve(cwd: str | None = None) -> int:
     """Run the daemon in the foreground until stopped or idle (see config)."""
-    import fcntl
-
     if not SUPPORTED:
         print("pii-airlock daemon needs Unix sockets (not available here).", file=sys.stderr)
         return 1
+    import fcntl
+
     directory = runtime_dir()
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     if not _is_private(directory, stat.S_IFDIR):

@@ -6,6 +6,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
@@ -57,6 +58,23 @@ def _build_config(lang: str | None, threshold: float | None) -> object:
     return load_config(overrides)
 
 
+def _policy_tokenizer(config, mapping):
+    """`mapping.token_for` that obeys `entity_actions` (CSV columns chosen by header)."""
+    from .engine import PolicyBlocked
+
+    def tokenize(entity: str, value: str) -> str:
+        action = config.action_for(entity)
+        if action == "block":
+            raise PolicyBlocked(Counter({entity: 1}))
+        if action == "allow":
+            return value
+        if action == "redact":
+            return f"[{entity}]"
+        return mapping.token_for(entity, value)
+
+    return tokenize
+
+
 def _read_input(file: Path | None, binary: bool) -> str | bytes:
     if file is None:
         return sys.stdin.buffer.read() if binary else sys.stdin.read()
@@ -103,7 +121,7 @@ def scrub(
     mapping = new_mapping(config)
 
     def run(transform):
-        return handler_cls(raw).scrub(transform, mapping.token_for)
+        return handler_cls(raw).scrub(transform, _policy_tokenizer(config, mapping))
 
     try:
         if handler_cls.many_texts and config.analysis_cache_size > 0:

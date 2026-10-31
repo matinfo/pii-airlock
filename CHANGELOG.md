@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-31
+
 ### Security
+- Header-profiled CSV columns now obey `entity_actions` (block / redact / allow); they used
+  to be tokenized and stored in the mapping regardless. Redacted persons no longer reach
+  surrogate fakes (and so the saved mapping).
 - Gateway and `scrub` (CSV/JSON/DOCX): a value detected in one message (or cell) is now
   scrubbed in every other one, *earlier* ones included. Before, "Jean Dupont" found
   only in the last message left a bare "dupont" in an earlier message in clear.
@@ -186,7 +191,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-hook`.
 - Config override chain: bundled defaults → user → project → CLI flags.
 
-[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/matinfo/pii-airlock/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/matinfo/pii-airlock/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/matinfo/pii-airlock/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/matinfo/pii-airlock/compare/v0.2.0...v0.2.1

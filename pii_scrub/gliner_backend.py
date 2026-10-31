@@ -28,6 +28,10 @@ LABELS: dict[str, str] = {
     "address": "LOCATION",
 }
 
+# Lowest score asked of the model (Presidio's own default); thresholds below it
+# have no effect.
+MODEL_FLOOR = 0.3
+
 # Characters per window, well under the model's ~384-token limit, and overlap
 # so an entity cut by one window boundary is whole in the next.
 WINDOW = 1000
@@ -111,10 +115,10 @@ def build_analyzer(config):
 
     lang = config.languages[0]
     model = load_model(config.gliner_model)
-    # Ask the model for anything a threshold could keep; policy filters later.
+    # Fixed floor, never the config's thresholds: the daemon shares this analyzer
+    # across projects, and the cache holds unfiltered findings. Policy filters later.
     entities = set(LABELS.values())
-    overrides = [config.score_thresholds[e] for e in entities if e in config.score_thresholds]
-    threshold = min([config.score_threshold, *overrides])
+    threshold = MODEL_FLOOR
 
     class GlinerRecognizer(LocalRecognizer):
         def load(self) -> None:

@@ -337,3 +337,11 @@ def test_invalid_action_is_rejected_and_actions_accumulate():
     cfg = Config().merged_with({"entity_actions": {"person": "redact"}}).merged_with(
         {"entity_actions": {"IBAN_CODE": "block"}})
     assert cfg.entity_actions == {"PERSON": "redact", "IBAN_CODE": "block"}
+
+
+def test_redacted_persons_never_reach_surrogate_fakes():
+    eng = _engine_finding("Jean Dupont")
+    eng.config = eng.config.merged_with({"entity_actions": {"PERSON": "redact"}})
+    m = Mapping(b"k" * 32, surrogates=True)
+    out = eng.scrub_all(lambda f: [f("Jean Dupont wrote")], m)
+    assert out == ["[PERSON] wrote"] and "Dupont" not in str(m.to_dict())

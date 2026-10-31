@@ -160,3 +160,21 @@ def test_scrub_refuses_a_file_with_a_blocked_entity(tmp_path, monkeypatch):
                                          str(tmp_path / "out.txt")])
     assert result.exit_code == 1 and "EMAIL_ADDRESS×1" in result.output
     assert not (tmp_path / "out.txt").exists()
+
+
+def test_header_profiled_csv_columns_obey_entity_actions(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    (tmp_path / ".pii-airlock.yaml").write_text(
+        "entity_actions: {EMAIL_ADDRESS: redact}\nlanguages: [en]\nmodels: {en: x}\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("pii_scrub.engine.ScrubEngine._analyzer",
+                        __import__("types").SimpleNamespace(analyze=lambda **_k: []))
+    src = tmp_path / "p.csv"
+    src.write_text("id,email\n1,jean@acme.fr\n")
+    out = tmp_path / "o.csv"
+    result = CliRunner().invoke(cli.app, ["scrub", str(src), "--map", str(tmp_path / "m.json"),
+                                         "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert "[EMAIL_ADDRESS]" in out.read_text()
+    assert "jean@acme.fr" not in (tmp_path / "m.json").read_text()

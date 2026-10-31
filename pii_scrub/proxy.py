@@ -213,8 +213,14 @@ def build_app(
             )
 
         # --- restore inbound: buffered (JSON, or Gemini's array stream) ---
-        raw = await upstream_resp.aread()
-        await upstream_resp.aclose()
+        try:
+            raw = await upstream_resp.aread()
+        except httpx.HTTPError as exc:
+            if map_key is not None:
+                mapping_store.delete(map_key)
+            return Response(f"pii-airlock: upstream response failed — {exc}", status_code=502)
+        finally:
+            await upstream_resp.aclose()
         if scrub_this and "json" in content_type:
             try:
                 data = json.loads(raw)
