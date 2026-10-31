@@ -68,9 +68,24 @@ def _quiet():
 
 def _read_event() -> dict:
     try:
-        return json.loads(sys.stdin.read() or "{}")
+        return _normalize(json.loads(sys.stdin.read() or "{}"))
     except json.JSONDecodeError:
         return {}
+
+
+def _normalize(event: dict) -> dict:
+    """Bring a GitHub Copilot hook payload (camelCase, `toolArgs` as a JSON string)
+    to the Claude Code shape; `copilot` marks it so the reply uses Copilot's format."""
+    if not isinstance(event, dict) or not ({"toolName", "sessionId"} & event.keys()):
+        return event if isinstance(event, dict) else {}
+    args = event.get("toolArgs")
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except ValueError:
+            args = {"raw": args}  # unparseable: still scanned as text
+    return {**event, "copilot": True, "tool_name": event.get("toolName") or "",
+            "tool_input": args if isinstance(args, dict) else {}}
 
 
 def _load_config(event: dict) -> tuple[Config, BaseException | None]:
@@ -189,8 +204,16 @@ def _emit(payload: dict) -> None:
 
 def _tool_texts(tool: str, tool_input: dict, event: dict, config: Config) -> list[str] | None:
     """Strings to scan for this tool call, or None if the tool is not covered."""
-    if tool.startswith("mcp__"):
-        return _collect_strings(tool_input)  # MCP tools: every argument
+    if tool.startswith("mcp__") or event.get("copilot"):
+        # MCP tools, and every Copilot tool (its tool and argument names are not
+        # Claude Code's, so scan every argument rather than guess which ones matter).
+        texts = _collect_strings(tool_input)
+        if event.get("copilot") and tool.lower() in ("view", "read"):
+            path = tool_input.get("path") or tool_input.get("file_path")
+            content = _read_file_text({"file_path": path}, event.get("cwd"), config)
+            if content:
+                texts.append(content)
+        return texts
     fields = _TOOL_FIELDS.get(tool)
     if fields is None:
         return None
@@ -235,6 +258,9 @@ def run_pre_tool_use() -> None:
             decision = "deny"
             reason = (f"pii-airlock: {tool} input blocked by policy (entity_actions) — "
                       f"{_summary(blocked)}. Use a placeholder instead.")
+    if event.get("copilot"):
+        _emit({"permissionDecision": decision, "permissionDecisionReason": reason})
+        return
     _emit(
         {
             "hookSpecificOutput": {

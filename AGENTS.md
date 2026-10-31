@@ -145,6 +145,59 @@ client = genai.Client(
 
 ---
 
+### GitHub Copilot
+
+Copilot has three surfaces; only some can be guarded.
+
+| Surface | Covered by | Notes |
+|---|---|---|
+| Copilot Chat / agent mode in VS Code with **your own model** | gateway | Add a *Custom Endpoint* model (below). Needs your own API key. |
+| Copilot CLI and the cloud agent: tool calls | hook | `pii-airlock install-hook --target copilot` |
+| Default Copilot models, inline suggestions, prompts in the CLI | **not covered** | GitHub's backend has no base-URL setting; bring-your-own-key does not apply to inline suggestions; Copilot ignores a `userPromptSubmitted` hook's output, so prompts cannot be blocked by a hook. |
+
+**VS Code, custom model through the gateway** (`chatLanguageModels.json`, via *Manage Models*).
+Give the full URL; the gateway forwards your key and scrubs the request:
+
+```json
+[
+  {
+    "name": "OpenAI via pii-airlock",
+    "vendor": "customendpoint",
+    "apiKey": "${input:openaiKey}",
+    "apiType": "chat-completions",
+    "models": [{
+      "id": "gpt-4o", "name": "GPT-4o", "toolCalling": true,
+      "url": "http://127.0.0.1:8745/openai/v1/chat/completions",
+      "maxInputTokens": 100000, "maxOutputTokens": 16000
+    }]
+  },
+  {
+    "name": "Claude via pii-airlock",
+    "vendor": "customendpoint",
+    "apiKey": "${input:anthropicKey}",
+    "apiType": "messages",
+    "models": [{
+      "id": "claude-sonnet-4-6", "name": "Claude Sonnet", "toolCalling": true,
+      "url": "http://127.0.0.1:8745/anthropic/v1/messages",
+      "maxInputTokens": 100000, "maxOutputTokens": 16000
+    }]
+  }
+]
+```
+
+(`apiType: responses` works too, with `http://127.0.0.1:8745/openai/v1/responses`.)
+
+**Copilot CLI / cloud agent, hook.** `pii-airlock install-hook --target copilot` writes
+`.github/hooks/pii-airlock.json` (`--scope user`: `~/.copilot/hooks/`, or `$COPILOT_HOME`).
+It registers `preToolUse`; the same checks as for Claude Code apply (`hook_decision`,
+`entity_actions: block`, `hook_on_error`). Copilot's tool and argument names differ from
+Claude Code's, so every argument of every tool call is scanned. A hook timeout is fail-open in
+Copilot, so keep the daemon on (`hook_daemon: auto`, the default) to stay well under it. The
+cloud agent treats `ask` as `deny`.
+
+> Written from GitHub's and VS Code's current docs; not yet exercised against a live Copilot
+> session. If a tool call slips through, open an issue with the hook payload.
+
 ## Adding a provider
 
 Adding a provider is one small adapter — see

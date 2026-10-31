@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- GitHub Copilot: `pii-airlock install-hook --target copilot` writes a `preToolUse` hook file
+  for the Copilot CLI and cloud agent. The hook understands Copilot's payload (camelCase,
+  `toolArgs` as JSON text), scans every tool argument and answers in Copilot's format.
+  AGENTS.md documents VS Code custom-endpoint models through the gateway and what stays
+  uncovered (default models, inline suggestions, prompts in the CLI).
+
 ## [0.5.0] - 2026-10-31
 
 ### Added

@@ -6,6 +6,7 @@ Kept free of heavy imports so it stays fast and unit-testable.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 PROJECT_SETTINGS = Path.cwd() / ".claude" / "settings.json"
@@ -78,3 +79,38 @@ def _find_group(groups: list, command: str) -> dict | None:
             if hook.get("command") == command:
                 return group
     return None
+
+
+# --- GitHub Copilot (CLI and cloud agent) -----------------------------------
+# Copilot hooks live in their own files. Only `preToolUse` can block: a
+# `userPromptSubmitted` hook's output is dropped, so prompts are covered by the
+# gateway (see AGENTS.md), not by a hook.
+COPILOT_HOOK = {
+    "version": 1,
+    "hooks": {
+        "preToolUse": [{
+            "type": "command",
+            "bash": "pii-airlock hook pre-tool-use",
+            "powershell": "pii-airlock hook pre-tool-use",
+            "timeoutSec": 30,
+        }],
+    },
+}
+
+
+def copilot_hook_path(scope: str) -> Path:
+    if scope == "user":
+        home = Path(os.environ.get("COPILOT_HOME") or Path.home() / ".copilot")
+        return home / "hooks" / "pii-airlock.json"
+    return Path.cwd() / ".github" / "hooks" / "pii-airlock.json"
+
+
+def install_copilot(scope: str) -> tuple[Path, bool]:
+    """Write the Copilot hook file. Idempotent; returns (path, changed)."""
+    path = copilot_hook_path(scope)
+    text = json.dumps(COPILOT_HOOK, indent=2) + "\n"
+    if path.is_file() and path.read_text(encoding="utf-8") == text:
+        return path, False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path, True
