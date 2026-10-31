@@ -13,7 +13,10 @@ USER_SETTINGS = Path.home() / ".claude" / "settings.json"
 
 # event name -> (console command, optional tool matcher)
 HOOK_SPECS: dict[str, tuple[str, str | None]] = {
-    "PreToolUse": ("pii-airlock hook pre-tool-use", "Bash|Write|Edit|MultiEdit|Read"),
+    "PreToolUse": (
+        "pii-airlock hook pre-tool-use",
+        "Bash|Write|Edit|MultiEdit|NotebookEdit|Read|Grep|WebFetch|WebSearch|mcp__.*",
+    ),
     "UserPromptSubmit": ("pii-airlock hook user-prompt-submit", None),
 }
 
@@ -38,7 +41,8 @@ def _load(path: Path) -> dict:
 def install(event: str, scope: str) -> tuple[Path, list[str]]:
     """Add the requested hooks to settings.json. Idempotent.
 
-    Returns (settings_path, list_of_events_added).
+    An existing pii-airlock entry with an outdated tool matcher is upgraded in
+    place. Returns (settings_path, list_of_events_added_or_upgraded).
     """
     if event not in EVENT_CHOICES:
         raise ValueError(f"--event must be one of {', '.join(EVENT_CHOICES)}")
@@ -50,7 +54,11 @@ def install(event: str, scope: str) -> tuple[Path, list[str]]:
     for ev in EVENT_CHOICES[event]:
         command, matcher = HOOK_SPECS[ev]
         groups = hooks.setdefault(ev, [])
-        if _already_present(groups, command):
+        existing = _find_group(groups, command)
+        if existing is not None:
+            if matcher and existing.get("matcher") != matcher:
+                existing["matcher"] = matcher
+                added.append(ev)
             continue
         entry: dict = {"hooks": [{"type": "command", "command": command}]}
         if matcher:
@@ -64,9 +72,9 @@ def install(event: str, scope: str) -> tuple[Path, list[str]]:
     return path, added
 
 
-def _already_present(groups: list, command: str) -> bool:
+def _find_group(groups: list, command: str) -> dict | None:
     for group in groups:
         for hook in group.get("hooks", []):
             if hook.get("command") == command:
-                return True
-    return False
+                return group
+    return None

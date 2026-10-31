@@ -51,3 +51,17 @@ def test_invalid_event(monkeypatch, tmp_path):
     except ValueError:
         return
     raise AssertionError("expected ValueError")
+
+
+def test_install_upgrades_outdated_matcher(monkeypatch, tmp_path):
+    proj = _patch_paths(monkeypatch, tmp_path)
+    proj.parent.mkdir(parents=True)
+    proj.write_text(json.dumps({"hooks": {"PreToolUse": [{
+        "matcher": "Bash|Read",
+        "hooks": [{"type": "command", "command": "pii-airlock hook pre-tool-use"}],
+    }]}}))
+    _, added = hi.install("tool", "project")
+    assert added == ["PreToolUse"]
+    group = json.loads(proj.read_text())["hooks"]["PreToolUse"]
+    assert len(group) == 1
+    assert "mcp__" in group[0]["matcher"]

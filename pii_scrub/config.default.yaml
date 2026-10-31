@@ -22,14 +22,110 @@ score_threshold: 0.5
 #           IBAN_CODE, LOCATION, URL, DATE_TIME
 entities: []
 
+# Entity types skipped unless listed in `entities` above: they fire on every
+# date, link or long number in code and shell commands. PII inside a URL (an
+# email, a name) is still caught by its own recognizer. Set to [] to keep all.
+exclude_entities:
+  - DATE_TIME
+  - URL
+  - NRP
+  - US_DRIVER_LICENSE
+  - US_BANK_NUMBER
+  - US_PASSPORT
+  - IN_VEHICLE_REGISTRATION
+
+# Per-entity minimum confidence, overriding score_threshold, e.g.
+#   score_thresholds: {PERSON: 0.7, PHONE_NUMBER: 0.4}
+score_thresholds: {}
+
+# Built-in recognizers Presidio lacks (FR NIR, CH AHV, SIRET/SIREN, FR/CH phone
+# formats, API keys / passwords as SECRET). Checksum-validated, every language.
+builtin_recognizers: true
+
+# Which model finds names, organizations and places:
+#   spacy  -> one spaCy model per language (`models:` above)
+#   gliner -> one multilingual GLiNER model for every language; needs
+#             pip install 'pii-airlock[gliner]' (PyTorch, ~1 GB model download)
+# Emails, phones, IDs and secrets are found by patterns with either backend.
+ner_backend: spacy
+gliner_model: urchade/gliner_multi_pii-v1
+
+# How many analyzed texts (per language) are remembered, so text seen again,
+# e.g. the conversation history resent by chat clients on every turn, is not
+# analyzed again. Only a digest of each text and the detected offsets are kept,
+# never the text. 0 disables the cache (and batched pre-analysis).
+analysis_cache_size: 2048
+
 # Default decision returned by the Claude Code hooks when PII is found:
 #   ask  -> surface the PII and let the user confirm (recommended)
 #   deny -> block the action / prompt outright
 hook_decision: ask
 
+# What the UserPromptSubmit hook does when your prompt contains PII.
+# (Claude Code cannot "ask" on prompts: the prompt is either blocked or sent.)
+#   block -> stop the prompt and show you a scrubbed version to send instead
+#   warn  -> send the prompt anyway, with a warning (PII still leaves your machine)
+prompt_decision: block
+
+# What the hooks do when detection itself fails (e.g. spaCy model missing):
+#   closed -> treat the input as containing PII (ask/deny/block as configured)
+#   open   -> let it through unchecked
+hook_on_error: closed
+
+# Largest file (bytes) the PreToolUse hook scans when Claude reads a file.
+# Larger files are treated like a detection failure (see hook_on_error).
+hook_max_file_bytes: 2000000
+
+# Hooks start a new process per tool call, and loading the spaCy models takes
+# 0.5-3 s each time. The daemon keeps them loaded (Unix socket in a user-only
+# directory; nothing leaves the machine):
+#   auto -> use the daemon, starting it in the background when it is not running
+#   off  -> always analyze in the hook process
+# Not available on Windows (hooks analyze in-process there).
+hook_daemon: auto
+
+# The daemon exits after this many idle minutes, freeing the models' memory.
+# 0 = never.
+hook_daemon_idle_minutes: 30
+
+# How a hook analyzes when no daemon answers (e.g. while it starts):
+#   inprocess -> load the models in the hook (complete, slow)
+#   regex     -> patterns only: emails, phones, IBAN, cards, IPs, IDs, secrets and
+#                your deny_list, in milliseconds; names and places are NOT detected
+hook_fallback: inprocess
+
+# The gateway refuses request bodies it does not know how to scrub (fail closed).
+# List path fragments ("<provider>/<path>") whose bodies may be forwarded raw,
+# e.g. endpoints you know carry no personal data:
+#   passthrough_paths:
+#     - openai/v1/files
+passthrough_paths: []
+
+# How placeholder tokens are named:
+#   stable     -> <PERSON_482913>: a keyed hash of the value, the same in every
+#                 request, file and process. The model sees one person under one
+#                 token across turns, subagents and trimmed histories, and prompt
+#                 caches keep hitting. The key stays on this machine
+#                 (~/.local/state/pii-airlock/token.key): without it a token
+#                 reveals nothing about its value.
+#   surrogate  -> realistic fakes, keyed the same way: "Jean Dupont" becomes
+#                 "Gaspard Castellan", jean.dupont@acme.fr becomes
+#                 gaspard.castellan@example.com; phones, cards, IBANs and IPs keep
+#                 their shape. Text reads naturally for the model. Other entities
+#                 get stable tokens. A fake the model writes in another sense
+#                 (e.g. a fake first name alone) is restored too.
+#   sequential -> <PERSON_1>, <PERSON_2> in reading order, per request or file.
+token_style: stable
+
+# stable tokens: how long the same value keeps the same token (day | week | never).
+# Across periods tokens cannot be linked, so the provider cannot follow one
+# person through all your conversations; `never` keeps them forever (e.g. to
+# scrub a dataset in several runs).
+token_rotation: day
+
 # Mapping storage backend (advanced):
 #   memory -> process-local ephemeral mappings (default; fastest)
-#   file   -> save mappings under `mapping_dir` or ./.pii-airlock-maps
+#   file   -> save mappings under `mapping_dir` or ~/.local/state/pii-airlock/maps
 mapping_backend: memory
 
 # Optional directory for mapping_backend: file

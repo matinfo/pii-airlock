@@ -13,6 +13,8 @@ from __future__ import annotations
 from collections.abc import Callable
 
 Scrubber = Callable[[str], str]
+#: (entity_type, value) -> token; replaces a whole value known to be PII
+Tokenizer = Callable[[str, str], str]
 
 
 class MissingExtra(RuntimeError):
@@ -34,9 +36,14 @@ class Handler:
     binary_output: bool = False
     #: suffix for a default output file
     out_suffix: str = ".txt"
+    #: scrub() passes many small strings (cells, runs) to the scrubber, worth
+    #: analyzing as one batch first
+    many_texts: bool = False
 
     def __init__(self, raw: str | bytes) -> None:
         self.raw = raw
 
-    def scrub(self, scrub: Scrubber) -> str | bytes:  # pragma: no cover - abstract
+    def scrub(
+        self, scrub: Scrubber, tokenize: Tokenizer | None = None
+    ) -> str | bytes:  # pragma: no cover - abstract
         raise NotImplementedError

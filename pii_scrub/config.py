@@ -3,8 +3,14 @@
 Override chain (lowest -> highest priority):
     bundled config.default.yaml
     ~/.config/pii-airlock/config.yaml
+    ~/.claude/skills/pii-airlock/SKILL.md      (policy block, see policy.py)
     ./.pii-airlock.yaml
+    ./.claude/skills/pii-airlock/SKILL.md      (policy block)
     CLI flags (applied by the caller)
+
+`allow_list`, `deny_list`, `custom_patterns` and `entity_actions` accumulate
+across layers (your personal allow list + the project's), every other key is
+overridden.
 """
 
 from __future__ import annotations
@@ -16,16 +22,33 @@ from typing import Any
 
 import yaml
 
+from .policy import normalize_deny, read_policy, skill_path
+from .trust import is_trusted, tighten_only
+
 # Shipped inside the package so it is always found, however pii-airlock is installed.
 _DEFAULT_FILE = Path(__file__).resolve().parent / "config.default.yaml"
 _CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 _USER_FILE = _CONFIG_HOME / "pii-airlock" / "config.yaml"
-_PROJECT_FILE = Path.cwd() / ".pii-airlock.yaml"
+_PROJECT_NAME = ".pii-airlock.yaml"
 
 # Built-in defaults. These make pii-airlock work even if no config file is found,
 # so an install can never end up with an empty model map. The bundled
 # config.default.yaml mirrors these for users to copy and override.
 _DEFAULT_MODELS = {"en": "en_core_web_lg", "fr": "fr_core_news_lg"}
+
+# Presidio entity types skipped unless listed in `entities`. In code, shell
+# commands and URLs they fire constantly (every date, every link, any 9-digit
+# number) and turn the hooks into noise users switch off. PII *inside* a URL
+# (an email, a name) is still caught by its own recognizer.
+DEFAULT_EXCLUDED_ENTITIES = (
+    "DATE_TIME",
+    "URL",
+    "NRP",
+    "US_DRIVER_LICENSE",
+    "US_BANK_NUMBER",
+    "US_PASSPORT",
+    "IN_VEHICLE_REGISTRATION",
+)
 
 
 @dataclass(frozen=True)
@@ -34,14 +57,95 @@ class Config:
     models: dict[str, str] = field(default_factory=lambda: dict(_DEFAULT_MODELS))
     score_threshold: float = 0.5
     entities: list[str] = field(default_factory=list)
+    exclude_entities: list[str] = field(default_factory=lambda: list(DEFAULT_EXCLUDED_ENTITIES))
+    score_thresholds: dict[str, float] = field(default_factory=dict)
+    builtin_recognizers: bool = True
+    analysis_cache_size: int = 2048
+    ner_backend: str = "spacy"
+    gliner_model: str = "urchade/gliner_multi_pii-v1"
     hook_decision: str = "ask"
+    prompt_decision: str = "block"
+    hook_on_error: str = "closed"
+    hook_max_file_bytes: int = 2_000_000
+    hook_daemon: str = "auto"
+    hook_daemon_idle_minutes: int = 30
+    hook_fallback: str = "inprocess"
+    passthrough_paths: list[str] = field(default_factory=list)
+    token_style: str = "stable"
+    token_rotation: str = "day"
     mapping_backend: str = "memory"
     mapping_dir: str | None = None
+    allow_list: list[str] = field(default_factory=list)
+    deny_list: dict[str, list[str]] = field(default_factory=dict)
+    custom_patterns: list[dict[str, Any]] = field(default_factory=list)
+    entity_actions: dict[str, str] = field(default_factory=dict)
+    # Project-config settings not applied because the project is not trusted.
+    ignored_project_keys: list[str] = field(default_factory=list)
+
+    def action_for(self, entity_type: str) -> str:
+        """What to do with a detected entity: tokenize, redact, allow or block.
+
+        `entity_actions` wins; otherwise entities in `exclude_entities` are
+        allowed unless asked for in `entities`; everything else is tokenized.
+        """
+        action = self.entity_actions.get(entity_type)
+        if action:
+            return action
+        if entity_type in self.exclude_entities and entity_type not in self.entities:
+            return "allow"
+        return "tokenize"
 
     def merged_with(self, data: dict[str, Any]) -> Config:
         """Return a copy with non-None keys from `data` applied."""
         clean = {k: v for k, v in data.items() if v is not None and k in self.__dataclass_fields__}
+        if "allow_list" in clean:
+            clean["allow_list"] = _union(self.allow_list, [str(t) for t in clean["allow_list"]])
+        if "deny_list" in clean:
+            deny = {k: list(v) for k, v in self.deny_list.items()}
+            for entity, terms in normalize_deny(clean["deny_list"]).items():
+                deny[entity] = _union(deny.get(entity, []), terms)
+            clean["deny_list"] = deny
+        if "exclude_entities" in clean:
+            clean["exclude_entities"] = [str(e).upper() for e in clean["exclude_entities"]]
+        if "score_thresholds" in clean:
+            clean["score_thresholds"] = {
+                str(k).upper(): float(v) for k, v in (clean["score_thresholds"] or {}).items()
+            }
+        if "entity_actions" in clean:
+            clean["entity_actions"] = {
+                **self.entity_actions, **normalize_actions(clean["entity_actions"])
+            }
+        if "custom_patterns" in clean:
+            clean["custom_patterns"] = [*self.custom_patterns, *clean["custom_patterns"]]
         return replace(self, **clean)
+
+
+ACTIONS = ("tokenize", "redact", "allow", "block")
+
+
+def normalize_actions(value: Any) -> dict[str, str]:
+    """``{entity: action}`` with upper-case entities; rejects unknown actions."""
+    if not isinstance(value, dict):
+        raise ValueError("entity_actions must be a mapping ENTITY: action")
+    out = {}
+    for entity, action in value.items():
+        action = str(action).strip().lower()
+        if action not in ACTIONS:
+            raise ValueError(
+                f"entity_actions: {entity}: {action!r} is not one of {', '.join(ACTIONS)}"
+            )
+        out[str(entity).strip().upper()] = action
+    return out
+
+
+def _union(base: list[str], extra: list[str]) -> list[str]:
+    seen = {t.casefold() for t in base}
+    out = list(base)
+    for term in extra:
+        if term.casefold() not in seen:
+            seen.add(term.casefold())
+            out.append(term)
+    return out
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -51,11 +155,29 @@ def _read_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(fh) or {}
 
 
-def load_config(overrides: dict[str, Any] | None = None) -> Config:
-    """Build a Config from the default file, then user/project files, then overrides."""
+def load_config(
+    overrides: dict[str, Any] | None = None, cwd: str | Path | None = None
+) -> Config:
+    """Build a Config from the default file, then user/project layers, then overrides.
+
+    `cwd` is the project directory (defaults to the current directory); hooks
+    pass the directory Claude Code reports, so the right project policy applies.
+    """
+    project = Path(cwd) if cwd else Path.cwd()
     cfg = Config().merged_with(_read_yaml(_DEFAULT_FILE))
     cfg = cfg.merged_with(_read_yaml(_USER_FILE))
-    cfg = cfg.merged_with(_read_yaml(_PROJECT_FILE))
+    cfg = cfg.merged_with(read_policy(skill_path("user")))
+    layers = [_read_yaml(project / _PROJECT_NAME), read_policy(skill_path("project", project))]
+    if is_trusted(project):
+        for layer in layers:
+            cfg = cfg.merged_with(layer)
+    else:
+        ignored: list[str] = []
+        for layer in layers:
+            safe, dropped = tighten_only(layer)
+            cfg = cfg.merged_with(safe)
+            ignored += dropped
+        cfg = replace(cfg, ignored_project_keys=sorted(set(ignored)))
     if overrides:
         cfg = cfg.merged_with(overrides)
     return cfg

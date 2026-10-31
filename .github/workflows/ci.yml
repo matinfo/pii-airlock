@@ -39,3 +39,21 @@ jobs:
         # Unit tests stub out Presidio/spaCy, so no model download is needed.
         # The proxy tests exercise the real ASGI stack with a mocked upstream.
         run: pytest -q
+
+  eval:
+    # Detection quality: per-entity recall/precision on the labeled EN+FR corpus
+    # (tests/eval), with the real small spaCy models. Fails below thresholds.json.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install (with dev extras and models)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          python -m spacy download en_core_web_sm
+          python -m spacy download fr_core_news_sm
+      - name: Eval gate
+        run: python -m tests.eval.run_eval --gate -v

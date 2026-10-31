@@ -6,6 +6,7 @@ swap mapping persistence strategies without changing scrub/restore logic.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Protocol
@@ -19,7 +20,9 @@ _SAFE_KEY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 class MappingStore(Protocol):
     """Interface for creating/loading/saving mapping objects."""
 
-    def create(self) -> Mapping: ...
+    def create(self, key: bytes | None = None, *, surrogates: bool = False) -> Mapping:
+        """A new mapping; `key` makes its tokens stable (see token_key.py)."""
+        ...
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str: ...
 
@@ -34,8 +37,8 @@ class InMemoryMappingStore:
     def __init__(self) -> None:
         self._items: dict[str, Mapping] = {}
 
-    def create(self) -> Mapping:
-        return Mapping()
+    def create(self, key: bytes | None = None, *, surrogates: bool = False) -> Mapping:
+        return Mapping(key, surrogates=surrogates)
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str:
         token = key or uuid4().hex
@@ -57,10 +60,15 @@ class FileMappingStore:
 
     def __init__(self, root: str | Path) -> None:
         self._root = Path(root)
-        self._root.mkdir(parents=True, exist_ok=True)
+        # Mapping files hold real PII: owner-only directory.
+        self._root.mkdir(mode=0o700, parents=True, exist_ok=True)
+        try:
+            os.chmod(self._root, 0o700)
+        except OSError:
+            pass  # best effort (e.g. filesystems without POSIX perms)
 
-    def create(self) -> Mapping:
-        return Mapping()
+    def create(self, key: bytes | None = None, *, surrogates: bool = False) -> Mapping:
+        return Mapping(key, surrogates=surrogates)
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str:
         token = key or uuid4().hex
@@ -80,6 +88,12 @@ class FileMappingStore:
         return self._root / f"{key}.pii-map.json"
 
 
+def default_state_dir() -> Path:
+    """``$XDG_STATE_HOME/pii-airlock`` (``~/.local/state/pii-airlock`` by default)."""
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base) / "pii-airlock"
+
+
 def build_mapping_store(
     backend: str = "memory", *, root: str | Path | None = None
 ) -> MappingStore:
@@ -87,11 +101,11 @@ def build_mapping_store(
 
     Supported backends:
       - memory (default): process-local, ephemeral
-      - file: JSON files under `root` (or `./.pii-airlock-maps`)
+      - file: JSON files under `root` (default: the user state dir, never the
+        project directory, where real PII could be committed or synced)
     """
     if backend == "memory":
         return InMemoryMappingStore()
     if backend == "file":
-        base = Path(root) if root is not None else (Path.cwd() / ".pii-airlock-maps")
-        return FileMappingStore(base)
+        return FileMappingStore(Path(root) if root is not None else default_state_dir() / "maps")
     raise ValueError(f"Unknown mapping backend '{backend}'. Supported: memory, file.")

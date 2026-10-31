@@ -1,6 +1,7 @@
 # Mapping files contain REAL PII — never commit them.
 *.pii-map.json
 *.pii-map.*
+.pii-airlock-maps/
 
 # Python
 __pycache__/

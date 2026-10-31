@@ -6,6 +6,8 @@ import importlib.util
 import os
 import subprocess
 import sys
+from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -14,6 +16,7 @@ from . import __version__
 from .config import load_config
 from .formats import MissingExtra, get_handler_class
 from .mapping import Mapping
+from .token_key import new_mapping
 
 app = typer.Typer(
     add_completion=False,
@@ -22,6 +25,13 @@ app = typer.Typer(
 )
 hook_app = typer.Typer(help="Claude Code hook entry points (read JSON from stdin).")
 app.add_typer(hook_app, name="hook")
+daemon_app = typer.Typer(
+    help="Hook daemon: keeps the models loaded so hooks answer in milliseconds."
+)
+app.add_typer(daemon_app, name="daemon")
+policy_app = typer.Typer(help="Per-project PII policy (Claude Code SKILL.md).",
+                         no_args_is_help=True)
+app.add_typer(policy_app, name="policy")
 
 
 def _version_cb(value: bool) -> None:
@@ -46,6 +56,23 @@ def _build_config(lang: str | None, threshold: float | None) -> object:
     if threshold is not None:
         overrides["score_threshold"] = threshold
     return load_config(overrides)
+
+
+def _policy_tokenizer(config, mapping):
+    """`mapping.token_for` that obeys `entity_actions` (CSV columns chosen by header)."""
+    from .engine import PolicyBlocked
+
+    def tokenize(entity: str, value: str) -> str:
+        action = config.action_for(entity)
+        if action == "block":
+            raise PolicyBlocked(Counter({entity: 1}))
+        if action == "allow":
+            return value
+        if action == "redact":
+            return f"[{entity}]"
+        return mapping.token_for(entity, value)
+
+    return tokenize
 
 
 def _read_input(file: Path | None, binary: bool) -> str | bytes:
@@ -84,24 +111,36 @@ def scrub(
     out: Path | None = typer.Option(None, "-o", "--out", help="Output file; omit for stdout."),
 ) -> None:
     """Replace PII with stable tokens, optionally saving a reversible mapping."""
-    from .engine import ScrubEngine  # lazy: avoids loading Presidio for --help
+    # lazy: avoids loading Presidio for --help
+    from .engine import PolicyBlocked, ScrubEngine, collect_texts
 
     config = _build_config(lang, threshold)
-    engine = ScrubEngine(config)
-
     handler_cls = get_handler_class(file, fmt)
     raw = _read_input(file, handler_cls.reads_binary)
 
-    mapping = Mapping()
-    language = config.languages[0]
+    mapping = new_mapping(config)
 
-    def _scrub_text(text: str) -> str:
-        return engine.scrub(text, mapping, language)
+    def run(transform):
+        return handler_cls(raw).scrub(transform, _policy_tokenizer(config, mapping))
 
     try:
-        result = handler_cls(raw).scrub(_scrub_text)
+        if handler_cls.many_texts and config.analysis_cache_size > 0:
+            # Dry run with an identity tokenizer: lists the cells to analyze
+            # (header-profiled columns need none) without minting tokens.
+            texts = collect_texts(lambda grab: handler_cls(raw).scrub(grab, lambda _e, v: v))
+            # One-shot process: hold the whole file's findings, not just the default.
+            size = max(config.analysis_cache_size, len(texts) * len(config.languages))
+            engine = ScrubEngine(replace(config, analysis_cache_size=size))
+            # A value found in any cell is scrubbed in every cell.
+            result = engine.scrub_all(run, mapping, texts)
+        else:
+            engine = ScrubEngine(config)
+            result = run(lambda t: engine.scrub(t, mapping))
     except MissingExtra as exc:
         typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    except PolicyBlocked as exc:
+        typer.echo(f"Not scrubbed, nothing written: {exc}.", err=True)
         raise typer.Exit(code=1) from None
 
     _write_output(out, result)
@@ -142,7 +181,7 @@ def detect(
     text = _read_input(file, binary=False)
     assert isinstance(text, str)
 
-    detections = engine.detect(text, config.languages[0])
+    detections = engine.detect(text)
     if not detections:
         typer.echo("No PII detected.")
         raise typer.Exit()
@@ -207,6 +246,18 @@ def _inject_hint(models: list[str]) -> None:
             )
 
 
+def _download_gliner(model: str) -> None:
+    from .gliner_backend import load_model
+
+    typer.echo(f"Downloading GLiNER model {model} ...", err=True)
+    try:
+        load_model(model)  # fetched into the Hugging Face cache
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo("Done.", err=True)
+
+
 def _configured_models(config: object) -> list[str]:
     return [config.models[lc] for lc in config.languages if lc in config.models]
 
@@ -233,8 +284,11 @@ def _env_export_examples(host: str, port: int) -> list[str]:
 def download_models(
     lang: str | None = typer.Option(None, "--lang", help="Languages, e.g. 'fr,en'."),
 ) -> None:
-    """Download the spaCy models configured for the selected languages."""
+    """Download the models configured for the selected languages."""
     config = _build_config(lang, None)
+    if config.ner_backend == "gliner":
+        _download_gliner(config.gliner_model)
+        return
     models = _configured_models(config)
     if not models:
         typer.echo("No models configured.", err=True)
@@ -333,8 +387,13 @@ def init(
 def doctor() -> None:
     """Health checks for a local pii-airlock installation."""
     config = _build_config(None, None)
-    models = _configured_models(config)
-    missing_models = [m for m in models if not _model_installed(m)]
+    if config.ner_backend == "gliner":
+        models = [f"{config.gliner_model} (GLiNER)"]
+        missing_models = ([] if importlib.util.find_spec("gliner")
+                          else ["gliner package: pip install 'pii-airlock[gliner]'"])
+    else:
+        models = _configured_models(config)
+        missing_models = [m for m in models if not _model_installed(m)]
     missing_deps = _missing_proxy_deps()
     has_pip = _has_pip()
     m = Mapping()
@@ -363,6 +422,7 @@ def doctor() -> None:
             mapping_ok,
             "ok",
         ),
+        ("hook daemon", True, _daemon_status(config)),
     ]
 
     failed = False
@@ -433,10 +493,156 @@ def install_hook(
         typer.echo(f"Hooks already present in {path} — nothing to do.")
 
 
+def _scope_path(scope: str) -> Path:
+    from .policy import skill_path
+
+    if scope not in ("project", "user"):
+        typer.echo("--scope must be 'project' or 'user'", err=True)
+        raise typer.Exit(code=1)
+    return skill_path(scope)
+
+
+def _policy_change(fn, path: Path, *args) -> bool:
+    """Run a policy edit; keep a trusted project trusted, never trust an unreviewed one."""
+    from .policy import PolicyError, skill_path
+    from .trust import is_trusted, trust
+
+    project = Path.cwd()
+    is_project = path == skill_path("project", project)
+    was_trusted = is_project and is_trusted(project)
+    try:
+        changed = fn(path, *args)
+    except PolicyError as exc:
+        typer.echo(f"{exc}\nFix the policy block by hand, then retry.", err=True)
+        raise typer.Exit(code=1) from None
+    if is_project and was_trusted:
+        trust(project)  # you just ran this: the files are yours
+    elif is_project:
+        typer.echo("Note: this project's pii-airlock config came with the repo and is not "
+                   "trusted, so settings that let more through are ignored. Review it, then "
+                   "run `pii-airlock trust`.", err=True)
+    return changed
+
+
+@policy_app.command("init")
+def policy_init(
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing SKILL.md."),
+) -> None:
+    """Create the policy skill (.claude/skills/pii-airlock/SKILL.md)."""
+    from .policy import init_skill
+
+    path = _scope_path(scope)
+    from .policy import skill_path
+    from .trust import is_trusted, trust
+
+    project = Path.cwd()
+    was_trusted = path == skill_path("project", project) and is_trusted(project)
+    if init_skill(path, force=force):
+        if was_trusted:
+            trust(project)
+        typer.echo(f"Created {path}")
+        typer.echo("Next: pii-airlock allow \"Your Company\"  /  pii-airlock deny \"Client X\"")
+    else:
+        typer.echo(f"{path} already exists — nothing to do (use --force to overwrite).")
+
+
+@app.command()
+def trust() -> None:
+    """Trust this project's .pii-airlock.yaml and SKILL.md policy as they are now.
+
+    Project config can loosen protection (allow lists, `hook_on_error: open`...),
+    so a project that came with a repo only gets its tightening settings applied
+    until you have reviewed it and run this. Re-run it after config changes you
+    pulled in.
+    """
+    from . import trust as trust_mod
+
+    project = Path.cwd()
+    if not trust_mod.has_project_config(project):
+        typer.echo("No project config here — nothing to trust.")
+        return
+    trust_mod.trust(project)
+    typer.echo(f"Trusted the pii-airlock config of {project}")
+
+
+@policy_app.command("show")
+def policy_show() -> None:
+    """Show the effective policy for the current project and where it comes from."""
+    from .policy import skill_path
+
+    config = _build_config(None, None)
+    for scope in ("user", "project"):
+        path = skill_path(scope)
+        typer.echo(f"{scope:<8} {path}  {'(found)' if path.is_file() else '(none)'}")
+    typer.echo(f"allow_list:      {', '.join(config.allow_list) or '-'}")
+    for entity, terms in config.deny_list.items():
+        typer.echo(f"deny_list {entity}: {', '.join(terms)}")
+    if not config.deny_list:
+        typer.echo("deny_list:       -")
+    for pattern in config.custom_patterns:
+        typer.echo(f"custom pattern:  {pattern.get('entity')}  {pattern.get('regex')}")
+    for entity, what in config.entity_actions.items():
+        typer.echo(f"action {entity}: {what}")
+    if config.ignored_project_keys:
+        typer.echo("NOT TRUSTED project config: only settings that tighten protection apply; "
+                   f"ignored: {', '.join(config.ignored_project_keys)}. "
+                   "Review it, then run `pii-airlock trust`.")
+    typer.echo(f"hook_decision: {config.hook_decision}   prompt_decision: "
+               f"{config.prompt_decision}   hook_on_error: {config.hook_on_error}")
+
+
+@app.command()
+def allow(
+    term: str = typer.Argument(..., help="Term that is never PII here, e.g. your company."),
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+) -> None:
+    """Never treat TERM as PII (adds it to the policy allow list)."""
+    from .policy import add_allow
+
+    path = _scope_path(scope)
+    if _policy_change(add_allow, path, term):
+        typer.echo(f"Allowed {term!r} in {path}")
+    else:
+        typer.echo(f"{term!r} is already allowed in {path}")
+
+
+@app.command()
+def deny(
+    term: str = typer.Argument(..., help="Term that is always sensitive, e.g. a client name."),
+    entity: str = typer.Option("CONFIDENTIAL", "--as", help="Label used in tokens."),
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+) -> None:
+    """Always treat TERM as PII (adds it to the policy deny list)."""
+    from .policy import add_deny
+
+    path = _scope_path(scope)
+    if _policy_change(add_deny, path, term, entity):
+        typer.echo(f"Denied {term!r} (as {entity.upper()}) in {path}")
+    else:
+        typer.echo(f"{term!r} is already in the deny list of {path}")
+
+
+@app.command()
+def action(
+    entity: str = typer.Argument(..., help="Entity type, e.g. IBAN_CODE, PERSON, SECRET."),
+    what: str = typer.Argument(..., help="tokenize | redact | allow | block"),
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+) -> None:
+    """Choose what happens to an entity type: tokenize, redact, allow or block."""
+    from .policy import set_action
+
+    path = _scope_path(scope)
+    if _policy_change(set_action, path, entity, what):
+        typer.echo(f"{entity.upper()} -> {what.lower()} in {path}")
+    else:
+        typer.echo(f"{entity.upper()} is already {what.lower()} in {path}")
+
+
 @hook_app.command("pre-tool-use")
 def hook_pre_tool_use() -> None:
     """PreToolUse hook entry point (reads event JSON from stdin)."""
-    from hooks._common import run_pre_tool_use
+    from .hooks._common import run_pre_tool_use
 
     run_pre_tool_use()
 
@@ -444,9 +650,62 @@ def hook_pre_tool_use() -> None:
 @hook_app.command("user-prompt-submit")
 def hook_user_prompt_submit() -> None:
     """UserPromptSubmit hook entry point (reads event JSON from stdin)."""
-    from hooks._common import run_user_prompt_submit
+    from .hooks._common import run_user_prompt_submit
 
     run_user_prompt_submit()
+
+
+def _daemon_status(config) -> str:
+    from . import daemon
+
+    if not daemon.SUPPORTED:
+        return "unsupported on this OS (hooks analyze in-process)"
+    if config.hook_daemon == "off":
+        return "off (hook_daemon: off)"
+    reply = daemon.call({"op": "ping"}, timeout=2.0)
+    if reply is not None:
+        return f"running (pid {reply.get('pid')}, socket {daemon.socket_path()})"
+    return "not running (starts on the next hook call)"
+
+
+@daemon_app.command("start")
+def daemon_start() -> None:
+    """Start the daemon in the background and wait until it answers."""
+    from . import daemon
+
+    if not daemon.SUPPORTED:
+        typer.echo("The hook daemon needs Unix sockets (not available here).", err=True)
+        raise typer.Exit(code=1)
+    if daemon.call({"op": "ping"}, timeout=2.0) is None:
+        daemon.spawn(str(Path.cwd()))
+    reply = daemon.wait_until_up(10)
+    if reply is None:
+        typer.echo(f"Daemon did not start; see {daemon.log_path()}", err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"Daemon running (pid {reply.get('pid')}); models load in the background.")
+
+
+@daemon_app.command("stop")
+def daemon_stop() -> None:
+    """Stop the running daemon."""
+    from . import daemon
+
+    reply = daemon.call({"op": "stop"}, timeout=2.0)
+    typer.echo("Daemon stopped." if reply is not None else "No daemon running.")
+
+
+@daemon_app.command("status")
+def daemon_status() -> None:
+    """Show whether the daemon is running."""
+    typer.echo(_daemon_status(_build_config(None, None)))
+
+
+@daemon_app.command("run")
+def daemon_run() -> None:
+    """Run the daemon in the foreground (for launchd/systemd or debugging)."""
+    from . import daemon
+
+    raise typer.Exit(code=daemon.serve(str(Path.cwd())))
 
 
 if __name__ == "__main__":
