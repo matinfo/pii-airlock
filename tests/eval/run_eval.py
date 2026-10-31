@@ -33,7 +33,10 @@ from pii_scrub.engine import ScrubEngine
 HERE = Path(__file__).parent
 CORPUS = HERE / "corpus.jsonl"
 THRESHOLDS = HERE / "thresholds.json"
-SMALL_MODELS = {"en": "en_core_web_sm", "fr": "fr_core_news_sm"}
+SMALL_MODELS = {
+    "en": "en_core_web_sm", "fr": "fr_core_news_sm",
+    "de": "de_core_news_sm", "it": "it_core_news_sm",
+}
 
 
 @dataclass

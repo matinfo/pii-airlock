@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- International phone numbers (`+49 30 ...`, `+39 02 ...`) leaked in German and Italian
+  text: Presidio scores a bare number 0.4 and only boosts it on English context words.
+  A built-in rule now catches any `+CC` number.
+- Digit groups inside an IBAN or card number are no longer also reported as a phone number.
+
+### Changed
+- The eval corpus covers German and Italian too (`de_core_news_sm`, `it_core_news_sm`).
+
 ## [0.4.0] - 2026-10-31
 
 ### Security

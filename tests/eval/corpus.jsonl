@@ -35,3 +35,27 @@
 {"id":"fr-clean-code","lang":"fr","text":"Lance git rebase main puis corrige les conflits dans src/app.py avant de pousser.","pii":[]}
 {"id":"fr-clean-version","lang":"fr","text":"Passe à la version 2.4.1 puis redémarre le service sur le port 8080.","pii":[]}
 {"id":"mixed-en-fr","lang":"fr","text":"Please ask Luc Girard (luc.girard@exemple.fr) de valider le document avant demain.","pii":[["PERSON","Luc Girard"],["EMAIL_ADDRESS","luc.girard@exemple.fr"]]}
+{"id":"de-person","lang":"de","text":"Heute hat Herr Thomas Brandt mit Frau Katharina Vogel über das Projekt gesprochen.","pii":[["PERSON","Thomas Brandt"],["PERSON","Katharina Vogel"]]}
+{"id":"de-person-2","lang":"de","text":"Die Rechnung wurde von Stefan Hoffmann unterschrieben und an Julia Neumann geschickt.","pii":[["PERSON","Stefan Hoffmann"],["PERSON","Julia Neumann"]]}
+{"id":"de-email","lang":"de","text":"Bitte schreiben Sie an lukas.meier@firma-beispiel.de, falls Sie Fragen haben.","pii":[["EMAIL_ADDRESS","lukas.meier@firma-beispiel.de"]]}
+{"id":"de-phone","lang":"de","text":"Rufen Sie mich unter +49 30 12345678 an, am besten vormittags.","pii":[["PHONE_NUMBER","+49 30 12345678"]]}
+{"id":"de-iban","lang":"de","text":"Bitte überweisen Sie den Betrag auf IBAN DE89 3704 0044 0532 0130 00 bis Freitag.","pii":[["IBAN_CODE","DE89 3704 0044 0532 0130 00"]]}
+{"id":"de-card","lang":"de","text":"Die Zahlung erfolgte mit der Kreditkarte 4111 1111 1111 1111 gestern Abend.","pii":[["CREDIT_CARD","4111 1111 1111 1111"]]}
+{"id":"de-location","lang":"de","text":"Das Büro in München zieht nächstes Jahr nach Hamburg um.","pii":[["LOCATION","München"],["LOCATION","Hamburg"]]}
+{"id":"de-ip","lang":"de","text":"Der Server mit der Adresse 203.0.113.42 antwortet nicht mehr.","pii":[["IP_ADDRESS","203.0.113.42"]]}
+{"id":"de-secret","lang":"de","text":"Der Zugangsschlüssel lautet sk-proj-Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z und darf nicht geteilt werden.","pii":[["SECRET","sk-proj-Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z"]]}
+{"id":"de-mixed","lang":"de","text":"Anna Schulz (anna.schulz@beispiel.org, +49 170 1234567) wohnt in Köln.","pii":[["PERSON","Anna Schulz"],["EMAIL_ADDRESS","anna.schulz@beispiel.org"],["PHONE_NUMBER","+49 170 1234567"],["LOCATION","Köln"]]}
+{"id":"de-clean","lang":"de","text":"Das Wetter ist heute schön, deshalb gehen wir am Nachmittag spazieren.","pii":[]}
+{"id":"de-clean-2","lang":"de","text":"Bitte aktualisieren Sie die Dokumentation und prüfen Sie die Testergebnisse bis morgen.","pii":[]}
+{"id":"it-person","lang":"it","text":"Oggi il signor Marco Rossi ha parlato con la signora Giulia Bianchi del progetto.","pii":[["PERSON","Marco Rossi"],["PERSON","Giulia Bianchi"]]}
+{"id":"it-person-2","lang":"it","text":"La fattura è stata firmata da Francesca Romano e inviata a Luca Ferrari.","pii":[["PERSON","Francesca Romano"],["PERSON","Luca Ferrari"]]}
+{"id":"it-email","lang":"it","text":"Scrivete a paolo.conti@azienda-esempio.it se avete domande sul contratto.","pii":[["EMAIL_ADDRESS","paolo.conti@azienda-esempio.it"]]}
+{"id":"it-phone","lang":"it","text":"Chiamami al +39 06 12345678 possibilmente in mattinata.","pii":[["PHONE_NUMBER","+39 06 12345678"]]}
+{"id":"it-iban","lang":"it","text":"Si prega di versare l'importo sull'IBAN IT60 X054 2811 1010 0000 0123 456 entro venerdì.","pii":[["IBAN_CODE","IT60 X054 2811 1010 0000 0123 456"]]}
+{"id":"it-card","lang":"it","text":"Il pagamento è stato effettuato con la carta 4111 1111 1111 1111 ieri sera.","pii":[["CREDIT_CARD","4111 1111 1111 1111"]]}
+{"id":"it-location","lang":"it","text":"L'ufficio di Milano si trasferirà l'anno prossimo a Torino.","pii":[["LOCATION","Milano"],["LOCATION","Torino"]]}
+{"id":"it-ip","lang":"it","text":"Il server all'indirizzo 198.51.100.17 non risponde più.","pii":[["IP_ADDRESS","198.51.100.17"]]}
+{"id":"it-secret","lang":"it","text":"La chiave di accesso è sk-proj-Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z e non va condivisa.","pii":[["SECRET","sk-proj-Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z"]]}
+{"id":"it-mixed","lang":"it","text":"Elena Greco (elena.greco@esempio.org, +39 333 1234567) abita a Napoli.","pii":[["PERSON","Elena Greco"],["EMAIL_ADDRESS","elena.greco@esempio.org"],["PHONE_NUMBER","+39 333 1234567"],["LOCATION","Napoli"]]}
+{"id":"it-clean","lang":"it","text":"Oggi il tempo è bello, quindi nel pomeriggio andremo a fare una passeggiata.","pii":[]}
+{"id":"it-clean-2","lang":"it","text":"Aggiorna la documentazione e controlla i risultati dei test entro domani.","pii":[]}

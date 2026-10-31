@@ -21,8 +21,8 @@ pytest -q           # unit + integration tests, fully offline
 
 Both must pass. CI runs them on Linux (Python 3.10–3.14) and on macOS + Windows.
 
-- Detection changes: run `python -m tests.eval.run_eval -v` (needs `en_core_web_sm` and
-  `fr_core_news_sm`) and add a labeled case to `tests/eval/corpus.jsonl`; CI gates on it.
+- Detection changes: run `python -m tests.eval.run_eval -v` (needs `en_core_web_sm`,
+  `fr_core_news_sm`, `de_core_news_sm` and `it_core_news_sm`) and add a labeled case to `tests/eval/corpus.jsonl`; CI gates on it.
 - Tests stub Presidio/spaCy, so they need no model download and no network.
 - Keep new code lint-clean and add tests for new behavior.
 - Match the surrounding style (type hints, `from __future__ import annotations`,
