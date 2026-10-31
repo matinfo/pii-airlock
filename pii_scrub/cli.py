@@ -12,7 +12,7 @@ from pathlib import Path
 
 import typer
 
-from . import __version__
+from . import __version__, mapping_crypto
 from .config import load_config
 from .formats import MissingExtra, get_handler_class
 from .mapping import Mapping
@@ -107,6 +107,10 @@ def scrub(
     fmt: str = typer.Option("auto", "--format", help="Force a format (text/csv/json/docx/pdf)."),
     map_path: Path | None = typer.Option(None, "--map", help="Mapping file path."),
     no_map: bool = typer.Option(False, "--no-map", help="Irreversible: don't write a mapping."),
+    encrypt_map: bool = typer.Option(
+        False, "--encrypt-map",
+        help="Encrypt the mapping file with this machine's key (restore needs the same key).",
+    ),
     threshold: float | None = typer.Option(None, "--threshold", help="Min confidence 0-1."),
     out: Path | None = typer.Option(None, "-o", "--out", help="Output file; omit for stdout."),
 ) -> None:
@@ -147,8 +151,17 @@ def scrub(
 
     if not no_map:
         target = map_path or _default_map_path(file)
-        mapping.save(target)
-        typer.echo(f"Mapping ({len(mapping)} entries) saved to {target}", err=True)
+        key = mapping_crypto.default_key() if encrypt_map else None
+        mapping.save(target, encrypt_key=key)
+        kind = "encrypted mapping" if encrypt_map else "Mapping"
+        typer.echo(f"{kind} ({len(mapping)} entries) saved to {target}", err=True)
+
+
+def _load_map(path: Path) -> Mapping:
+    """Load a mapping file; an encrypted one is opened with this machine's key."""
+    with path.open("rb") as fh:
+        sealed = mapping_crypto.is_sealed(fh.read(len(mapping_crypto.MAGIC)))
+    return Mapping.load(path, encrypt_key=mapping_crypto.default_key() if sealed else None)
 
 
 @app.command()
@@ -161,7 +174,11 @@ def restore(
     if not map_path.is_file():
         typer.echo(f"Mapping file not found: {map_path}", err=True)
         raise typer.Exit(code=1)
-    mapping = Mapping.load(map_path)
+    try:
+        mapping = _load_map(map_path)
+    except mapping_crypto.MappingDecryptError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
     text = _read_input(file, binary=False)
     assert isinstance(text, str)
     _write_output(out, mapping.restore(text))

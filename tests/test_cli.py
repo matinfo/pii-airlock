@@ -178,3 +178,56 @@ def test_header_profiled_csv_columns_obey_entity_actions(tmp_path, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "[EMAIL_ADDRESS]" in out.read_text()
     assert "jean@acme.fr" not in (tmp_path / "m.json").read_text()
+
+
+def _scrub_email(tmp_path, monkeypatch, *extra):
+    """Run `scrub` on a one-email file with the analyzer stubbed; returns the paths."""
+    from types import SimpleNamespace
+
+    from typer.testing import CliRunner
+
+    from pii_scrub.engine import ScrubEngine
+
+    def analyze(text, **_k):
+        from presidio_analyzer import RecognizerResult
+
+        i = text.find("jean@acme.fr")
+        return [RecognizerResult("EMAIL_ADDRESS", i, i + 12, 1.0)] if i >= 0 else []
+
+    monkeypatch.setattr(ScrubEngine, "_analyzer", SimpleNamespace(analyze=analyze))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    (tmp_path / ".pii-airlock.yaml").write_text("languages: [en]\nmodels: {en: x}\n")
+    monkeypatch.chdir(tmp_path)
+    src, out, mp = tmp_path / "in.txt", tmp_path / "out.txt", tmp_path / "m.pii-map.json"
+    src.write_text("mail jean@acme.fr please")
+    result = CliRunner().invoke(cli.app, ["scrub", str(src), "--map", str(mp), "-o", str(out),
+                                         *extra])
+    assert result.exit_code == 0, result.output
+    return out, mp
+
+
+def test_scrub_map_is_plain_json_by_default(tmp_path, monkeypatch):
+    _, mp = _scrub_email(tmp_path, monkeypatch)
+    assert "jean@acme.fr" in mp.read_text()
+
+
+def test_encrypt_map_round_trips_through_restore(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    out, mp = _scrub_email(tmp_path, monkeypatch, "--encrypt-map")
+    assert b"jean@acme.fr" not in mp.read_bytes()
+    restored = CliRunner().invoke(cli.app, ["restore", str(out), "--map", str(mp)])
+    assert restored.exit_code == 0, restored.output
+    assert "jean@acme.fr" in restored.output
+
+
+def test_restore_reports_a_map_encrypted_with_another_key(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    out, mp = _scrub_email(tmp_path, monkeypatch, "--encrypt-map")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "other-machine"))
+    from pii_scrub import token_key
+
+    token_key._master_key.cache_clear()
+    result = CliRunner().invoke(cli.app, ["restore", str(out), "--map", str(mp)])
+    assert result.exit_code == 1 and "cannot decrypt" in result.output
