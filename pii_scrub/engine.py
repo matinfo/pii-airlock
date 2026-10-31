@@ -46,6 +46,10 @@ class Detection:
         return source[self.start : self.end]
 
 
+# Identifiers whose digit groups must not be re-reported as phone numbers.
+_LONG_IDS = frozenset({"IBAN_CODE", "CREDIT_CARD"})
+
+
 class ScrubEngine:
     """Detect and scrub PII across the configured languages."""
 
@@ -180,7 +184,10 @@ class ScrubEngine:
             if self._keep(entity_type, score):
                 key = (entity_type, start, end)
                 best[key] = max(score, best.get(key, 0.0))
-        return [Detection(t, s, e, score) for (t, s, e), score in best.items()]
+        # Digit groups inside an IBAN or card number read as a national phone number.
+        ids = [(s, e) for (t, s, e) in best if t in _LONG_IDS]
+        return [Detection(t, s, e, score) for (t, s, e), score in best.items()
+                if not (t == "PHONE_NUMBER" and any(a <= s and e <= b for a, b in ids))]
 
     def _langs(self, language: str | None) -> list[str]:
         if self.config.ner_backend == "gliner":
