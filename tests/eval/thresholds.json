@@ -1,15 +1,68 @@
 {
-  "ALL": {"leak_free": 0.95, "precision": 0.40},
-  "PERSON": {"leak_free": 0.90},
-  "LOCATION": {"recall": 0.90},
-  "EMAIL_ADDRESS": {"recall": 1.0, "precision": 0.95},
-  "PHONE_NUMBER": {"recall": 1.0, "precision": 0.95},
-  "IBAN_CODE": {"recall": 1.0, "precision": 0.95},
-  "CREDIT_CARD": {"recall": 1.0, "precision": 0.95},
-  "IP_ADDRESS": {"recall": 1.0, "precision": 0.95},
-  "FR_NIR": {"recall": 1.0, "precision": 0.95},
-  "FR_SIRET": {"recall": 1.0, "precision": 0.95},
-  "FR_SIREN": {"recall": 1.0, "precision": 0.95},
-  "CH_AHV": {"recall": 1.0, "precision": 0.95},
-  "SECRET": {"recall": 1.0, "precision": 0.95}
+  "ALL": {
+    "leak_free": 0.95,
+    "precision": 0.4
+  },
+  "PERSON": {
+    "leak_free": 0.9
+  },
+  "LOCATION": {
+    "recall": 0.9
+  },
+  "EMAIL_ADDRESS": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "PHONE_NUMBER": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "IBAN_CODE": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "CREDIT_CARD": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "IP_ADDRESS": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "FR_NIR": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "FR_SIRET": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "FR_SIREN": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "CH_AHV": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "SECRET": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "DE_TAX_ID": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "DE_TAX_NUMBER": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "IT_FISCAL_CODE": {
+    "recall": 1.0,
+    "precision": 0.95
+  },
+  "IT_VAT_CODE": {
+    "recall": 1.0,
+    "precision": 0.95
+  }
 }

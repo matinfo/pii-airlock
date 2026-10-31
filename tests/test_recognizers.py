@@ -83,3 +83,34 @@ def test_engine_merges_builtin_and_respects_exclusions():
 ])
 def test_international_phone_without_english_context(text, value):
     assert ("PHONE_NUMBER", value) in _found(text)
+
+
+@pytest.mark.parametrize("text, entity, value", [
+    ("Die Steuer-ID lautet 86095742719 laut Bescheid.", "DE_TAX_ID", "86095742719"),
+    ("Meine IdNr.: 86 095 742 719.", "DE_TAX_ID", "86 095 742 719"),
+    ("Die Steuernummer lautet 21/815/08150 beim Amt.", "DE_TAX_NUMBER", "21/815/08150"),
+    ("Partita IVA IT12345678903 della ditta.", "IT_VAT_CODE", "IT12345678903"),
+    ("Rufen Sie 030 12345678 an.", "PHONE_NUMBER", "030 12345678"),
+    ("Rufen Sie 0170 1234567 an.", "PHONE_NUMBER", "0170 1234567"),
+    ("Rufen Sie 089/123456 an.", "PHONE_NUMBER", "089/123456"),
+    ("Chiama il 06 12345678 domani.", "PHONE_NUMBER", "06 12345678"),
+    ("Chiama il 333 1234567 domani.", "PHONE_NUMBER", "333 1234567"),
+    ("Chiama il 02 1234 5678 domani.", "PHONE_NUMBER", "02 1234 5678"),
+])
+def test_de_it_identifiers_and_national_phones(text, entity, value):
+    assert (entity, value) in _found(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Die Steuer-ID 86095742718 hat eine falsche Prüfziffer.",   # bad checksum
+    "Bestellnummer 86095742719 wurde versandt.",                # no keyword
+    "Partita IVA IT12345678904 della ditta.",                   # bad checksum
+    "Am 12.03.2024 um 10:30 kostet es 1234,56 EUR (PLZ 80331).",
+    "Order 2024 123456 shipped on 2024-03-12.",
+])
+def test_de_it_rules_ignore_lookalikes(text):
+    assert not {e for e, _ in _found(text)} & {"DE_TAX_ID", "IT_VAT_CODE", "PHONE_NUMBER"}
+
+
+def test_vat_keyword_without_prefix():
+    assert ("IT_VAT_CODE", "12345678903") in _found("P.IVA 12345678903 della ditta.")

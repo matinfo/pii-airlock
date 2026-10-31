@@ -59,3 +59,11 @@
 {"id":"it-mixed","lang":"it","text":"Elena Greco (elena.greco@esempio.org, +39 333 1234567) abita a Napoli.","pii":[["PERSON","Elena Greco"],["EMAIL_ADDRESS","elena.greco@esempio.org"],["PHONE_NUMBER","+39 333 1234567"],["LOCATION","Napoli"]]}
 {"id":"it-clean","lang":"it","text":"Oggi il tempo è bello, quindi nel pomeriggio andremo a fare una passeggiata.","pii":[]}
 {"id":"it-clean-2","lang":"it","text":"Aggiorna la documentazione e controlla i risultati dei test entro domani.","pii":[]}
+{"id":"de-tax-id","lang":"de","text":"Die Steuer-ID lautet 86095742719 und steht im Bescheid.","pii":[["DE_TAX_ID","86095742719"]]}
+{"id":"de-tax-number","lang":"de","text":"Bitte geben Sie beim Finanzamt die Steuernummer 21/815/08150 an.","pii":[["DE_TAX_NUMBER","21/815/08150"]]}
+{"id":"de-phone-national","lang":"de","text":"Erreichbar sind wir unter 030 12345678 oder mobil unter 0170 1234567.","pii":[["PHONE_NUMBER","030 12345678"],["PHONE_NUMBER","0170 1234567"]]}
+{"id":"de-numbers-clean","lang":"de","text":"Am 12.03.2024 um 10:30 kostet die Lieferung 1234,56 EUR, Bestellung 2024 123456, PLZ 80331.","pii":[]}
+{"id":"it-fiscal-code","lang":"it","text":"Il codice fiscale del cliente è RSSMRA85T10A562S come da contratto.","pii":[["IT_FISCAL_CODE","RSSMRA85T10A562S"]]}
+{"id":"it-vat","lang":"it","text":"La fattura è intestata alla ditta con Partita IVA IT12345678903.","pii":[["IT_VAT_CODE","IT12345678903"]]}
+{"id":"it-phone-national","lang":"it","text":"Ci trovi al 06 12345678 oppure sul cellulare 333 1234567 in giornata.","pii":[["PHONE_NUMBER","06 12345678"],["PHONE_NUMBER","333 1234567"]]}
+{"id":"it-numbers-clean","lang":"it","text":"Il 12/03/2024 alle 10:30 la consegna costa 1234,56 euro, ordine 2024 123456, CAP 00184.","pii":[]}

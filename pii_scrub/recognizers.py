@@ -51,6 +51,18 @@ def _valid_ahv(match: str) -> bool:
     return (10 - total % 10) % 10 == int(d[12])
 
 
+def _valid_steuer_id(match: str) -> bool:
+    """German tax ID (Steuer-IdNr.): 11 digits, ISO 7064 MOD 11,10 check digit."""
+    d = _digits(match)
+    if len(d) != 11 or d[0] == "0":
+        return False
+    product = 10
+    for ch in d[:10]:
+        product = 2 * ((int(ch) + product) % 10 or 10) % 11
+    check = 11 - product
+    return int(d[10]) == (0 if check == 10 else check)
+
+
 def _valid_luhn(match: str) -> bool:
     return _luhn(_digits(match))
 
@@ -88,6 +100,29 @@ RULES: tuple[Rule, ...] = (
     # only boosts it on English context words, so "Rufen Sie ... +49 30 ..." leaked.
     Rule("PHONE_NUMBER", _rx(r"(?<![\w+])\+\d{1,3}(?:[ .\-]?\(?\d{1,4}\)?){2,5}(?![\w])"),
          score=0.7, validate=lambda m: 8 <= len(_digits(m)) <= 15),
+    # --- Germany / Italy -----------------------------------------------------
+    # A bare 11-digit number passes the checksum 1 time in 10: require the keyword.
+    Rule("DE_TAX_ID",
+         _rx(r"\b(?:Steuer-?ID|Steuer-?Identifikationsnummer|IdNr\.?)[^\d\n]{0,25}?"
+             r"(\d{2} ?\d{3} ?\d{3} ?\d{3})(?![\w])", re.I),
+         score=0.85, validate=_valid_steuer_id, group=1),
+    Rule("DE_TAX_NUMBER",
+         _rx(r"\bSteuernummer[^\d\n]{0,25}?(\d{2,3}/\d{3}/\d{4,5}|\d{10,13})(?![\w])", re.I),
+         score=0.85, group=1),
+    # Presidio's IT_VAT_CODE also fires on German phone numbers; with the IT prefix
+    # and the checksum there is no doubt.
+    Rule("IT_VAT_CODE", _rx(r"(?<![\w])IT ?\d{11}(?![\w])"),
+         validate=_valid_luhn),
+    Rule("IT_VAT_CODE", _rx(r"\b(?:Partita ?IVA|P\.? ?IVA)[^\d\n]{0,15}(\d{11})(?![\w])", re.I),
+         validate=_valid_luhn, group=1),
+    # National phone formats (a separator is required: bare digit runs are ambiguous).
+    Rule("PHONE_NUMBER",
+         _rx(r"(?<![\w+/])0[1-9]\d{1,4}(?:[ /\-]\d{3,4}[ \-]?\d{2,5}|[ /\-]\d{4,9})(?![\w])"),
+         score=0.75, validate=lambda m: 9 <= len(_digits(m)) <= 13),
+    Rule("PHONE_NUMBER",
+         _rx(r"(?<![\w+])(?:0\d{1,3}[ ./\-]\d{4}[ ./\-]?\d{2,4}|0\d{1,3}[ ./\-]\d{6,8}"
+             r"|3\d{2}[ ./\-]\d{6,7}|3\d{2}[ ./\-]\d{3}[ ./\-]?\d{3,4})(?![\w])"),
+         score=0.75, validate=lambda m: 9 <= len(_digits(m)) <= 11),
     # National formats Presidio's phone recognizer (US/UK/DE/... regions) misses.
     Rule("PHONE_NUMBER",
          _rx(r"(?<![\w+])(?:\+33 ?(?:\(0\) ?)?|0033 ?|0)[1-9](?:[ .\-]?\d{2}){4}(?![\w])"),

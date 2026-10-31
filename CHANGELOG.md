@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- German and Italian identifiers: `DE_TAX_ID` (Steuer-IdNr., checksum + keyword), `DE_TAX_NUMBER`,
+  and `IT_VAT_CODE` (`IT` prefix or `P.IVA` keyword, Luhn). National phone formats for
+  Germany and Italy (`030 12345678`, `0170 1234567`, `06 12345678`, `333 1234567`).
+
+### Fixed
+- Presidio's `IT_VAT_CODE` fired on any 11-digit run, such as a German phone number: replaced
+  by the stricter built-in rule. Phone numbers inside another identifier (IBAN, card, tax ID)
+  are no longer reported separately.
+
 ## [0.4.0] - 2026-10-31
 
 ### Security

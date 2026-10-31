@@ -47,7 +47,10 @@ class Detection:
 
 
 # Identifiers whose digit groups must not be re-reported as phone numbers.
-_LONG_IDS = frozenset({"IBAN_CODE", "CREDIT_CARD"})
+_LONG_IDS = frozenset({
+    "IBAN_CODE", "CREDIT_CARD", "FR_NIR", "FR_SIRET", "FR_SIREN", "CH_AHV",
+    "DE_TAX_ID", "DE_TAX_NUMBER", "IT_VAT_CODE", "IT_FISCAL_CODE",
+})
 
 
 class ScrubEngine:
@@ -184,7 +187,7 @@ class ScrubEngine:
             if self._keep(entity_type, score):
                 key = (entity_type, start, end)
                 best[key] = max(score, best.get(key, 0.0))
-        # Digit groups inside an IBAN or card number read as a national phone number.
+        # Digit groups inside an IBAN, card or national ID read as a national phone number.
         ids = [(s, e) for (t, s, e) in best if t in _LONG_IDS]
         return [Detection(t, s, e, score) for (t, s, e), score in best.items()
                 if not (t == "PHONE_NUMBER" and any(a <= s and e <= b for a, b in ids))]
@@ -502,6 +505,11 @@ def _build_registry(languages: list[str], nlp_engine):
 
     registry = RecognizerRegistry(supported_languages=languages)
     registry.load_predefined_recognizers(languages=languages, nlp_engine=nlp_engine)
+    # Its bare 11-digit pattern fires on German and Italian phone numbers; our own
+    # rule requires the IT prefix or a "Partita IVA" keyword (recognizers.py).
+    for recognizer in list(registry.recognizers):
+        if "IT_VAT_CODE" in recognizer.supported_entities:
+            registry.remove_recognizer(recognizer.name)
     have_cc = {
         r.supported_language for r in registry.recognizers
         if isinstance(r, CreditCardRecognizer)
