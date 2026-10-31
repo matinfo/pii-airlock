@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from pii_scrub.mapping_store import (
@@ -62,5 +64,6 @@ def test_file_store_defaults_to_private_state_dir(tmp_path, monkeypatch):
     key = store.save(store.create())
     root = tmp_path / "state" / "pii-airlock" / "maps"
     assert (root / f"{key}.pii-map.json").is_file()
-    assert stat.S_IMODE(root.stat().st_mode) == 0o700
+    if os.name == "posix":  # Windows does not report POSIX modes
+        assert stat.S_IMODE(root.stat().st_mode) == 0o700
     assert not (tmp_path / ".pii-airlock-maps").exists()  # nothing in the project dir
