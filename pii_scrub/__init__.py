@@ -1,3 +1,3 @@
 """pii-airlock: local, reversible PII anonymization built on Microsoft Presidio."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
