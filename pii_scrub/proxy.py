@@ -131,7 +131,8 @@ def build_app(
 
         # --- scrub outbound; refuse what we can't scrub (fail closed) ---
         # Per request, not at startup: the stable-token key rotates (token_rotation).
-        mapping = mapping_store.create(token_key(config))
+        mapping = mapping_store.create(token_key(config),
+                                       surrogates=config.token_style == "surrogate")
         has_body = bool(body) and request.method in _BODY_METHODS
         scrub_this = has_body and _is_generation_endpoint(adapter, path)
         if has_body and not scrub_this and not _is_passthrough(config, provider, path):

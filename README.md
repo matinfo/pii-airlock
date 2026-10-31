@@ -206,6 +206,14 @@ without it a token reveals nothing about its value.
 - `token_rotation: day` (default) | `week` | `never` — how long a value keeps its
   token. Tokens cannot be linked across periods, so a provider cannot follow one person
   through all your conversations. Use `never` to scrub a dataset in several runs.
+- `token_style: surrogate` — realistic fakes instead of tokens, keyed the same way:
+  `Jean Dupont` → `Jasper Iverson`, `jean.dupont@acme.fr` → `jasper.iverson@example.com`;
+  phones, cards (Luhn-valid), IBANs (valid checksum) keep their shape, IPs come from the
+  documentation ranges. Text reads naturally, which some models and tools handle better
+  than `<TOKENS>`. A surname alone gets the surname of the full fake, and restores alone
+  too. Other entities (IDs, secrets, places) keep stable tokens. Trade-off: a fake the
+  model writes in another sense (a fake first name alone, for someone else) is restored
+  as well.
 - `token_style: sequential` — `<PERSON_1>`, `<PERSON_2>` in reading order, per request
   or file (the previous default).
 - Delete `token.key` to rotate the key immediately.

@@ -15,7 +15,7 @@ from . import __version__
 from .config import load_config
 from .formats import MissingExtra, get_handler_class
 from .mapping import Mapping
-from .token_key import token_key
+from .token_key import new_mapping
 
 app = typer.Typer(
     add_completion=False,
@@ -99,7 +99,7 @@ def scrub(
     handler_cls = get_handler_class(file, fmt)
     raw = _read_input(file, handler_cls.reads_binary)
 
-    mapping = Mapping(token_key(config))
+    mapping = new_mapping(config)
 
     def run(transform):
         return handler_cls(raw).scrub(transform, mapping.token_for)

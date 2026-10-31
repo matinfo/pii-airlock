@@ -268,6 +268,7 @@ class ScrubEngine:
         known = list(dict.fromkeys(
             (d.entity_type, d.text(t)) for t in texts for d in self.detect(t)
         ))
+        mapping.learn(known, texts)
         return run(lambda t: apply_detections(
             t, self.detect(t, known=[*known, *mapping.items()]), mapping
         ))

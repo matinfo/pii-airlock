@@ -48,9 +48,9 @@ class CountingStore:
         self._mapping = None
         self._key = "k1"
 
-    def create(self, key=None) -> Mapping:
+    def create(self, key=None, *, surrogates=False) -> Mapping:
         self.created += 1
-        return Mapping(key)
+        return Mapping(key, surrogates=surrogates)
 
     def save(self, mapping: Mapping, *, key: str | None = None) -> str:
         self.saved += 1

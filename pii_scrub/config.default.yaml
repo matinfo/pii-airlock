@@ -100,6 +100,12 @@ passthrough_paths: []
 #                 caches keep hitting. The key stays on this machine
 #                 (~/.local/state/pii-airlock/token.key): without it a token
 #                 reveals nothing about its value.
+#   surrogate  -> realistic fakes, keyed the same way: "Jean Dupont" becomes
+#                 "Gaspard Castellan", jean.dupont@acme.fr becomes
+#                 gaspard.castellan@example.com; phones, cards, IBANs and IPs keep
+#                 their shape. Text reads naturally for the model. Other entities
+#                 get stable tokens. A fake the model writes in another sense
+#                 (e.g. a fake first name alone) is restored too.
 #   sequential -> <PERSON_1>, <PERSON_2> in reading order, per request or file.
 token_style: stable
 

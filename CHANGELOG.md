@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- Surrogate mode (`token_style: surrogate`): realistic, stable fakes instead of tokens
+  (`Jasper Iverson`, `jasper.iverson@example.com`, same-shape phones, Luhn-valid cards,
+  checksum-valid IBANs, RFC 5737 IPs), restored in responses, streams (fakes split
+  across chunks) and tool-call arguments. Name parts and email local parts share the
+  full name's fakes. Fakes never collide with the input or each other; other
+  entities keep tokens. Mapping files (v2) store the fakes.
 - Stable tokens (default): `<PERSON_558644>` is an HMAC of the value with a local key
   (`~/.local/state/pii-airlock/token.key`, owner-only), so a value keeps one token
   across requests, files, processes, trimmed histories and subagents, and prompt

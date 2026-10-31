@@ -23,6 +23,7 @@ from datetime import date
 from functools import cache
 from pathlib import Path
 
+from .mapping import Mapping
 from .mapping_store import default_state_dir
 
 ROTATIONS = ("day", "week", "never")
@@ -78,8 +79,15 @@ def token_key(config, today: date | None = None) -> bytes | None:
     """Key for this period's stable tokens, or None for sequential tokens."""
     if config.token_style == "sequential":
         return None
-    if config.token_style != "stable":
-        raise ValueError(f"token_style must be stable or sequential, not {config.token_style!r}")
+    if config.token_style not in ("stable", "surrogate"):
+        raise ValueError(
+            f"token_style must be stable, surrogate or sequential, not {config.token_style!r}"
+        )
     label = period(config.token_rotation, today).encode()
     return hmac.new(_master_key(key_path()), b"pii-airlock tokens " + label,
                     hashlib.sha256).digest()
+
+
+def new_mapping(config) -> Mapping:
+    """An empty mapping minting tokens (or fakes) the way `config` asks."""
+    return Mapping(token_key(config), surrogates=config.token_style == "surrogate")

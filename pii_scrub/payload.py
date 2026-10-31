@@ -17,7 +17,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from .mapping import ANY_TOKEN_RE
+from .mapping import ANY_TOKEN_RE, Mapping
 
 Transform = Callable[[str], str]
 
@@ -61,18 +61,32 @@ def _json_text(text: str, transform: Transform) -> str:
     return json.dumps(_deep(parsed, transform), ensure_ascii=False)
 
 
+def _mapping_of(restore: Transform) -> Mapping | None:
+    """The Mapping behind a ``mapping.restore`` transform (it also knows fakes)."""
+    owner = getattr(restore, "__self__", None)
+    return owner if isinstance(owner, Mapping) else None
+
+
+def _json_str(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)[1:-1]
+
+
 def json_escaped(restore: Transform) -> Transform:
     """Wrap a restore transform for text that is (a fragment of) JSON source.
 
     Restored values are inserted JSON-escaped, so a name containing a quote or
     backslash cannot break a tool-call ``arguments`` string.
     """
+    mapping = _mapping_of(restore)
+    if mapping is not None:
+        return lambda text: mapping.restore(text, escape=_json_str)
+
     def _sub(match: re.Match) -> str:
         token = f"<{match.group(1)}>"
         value = restore(token)
         if value == token:
             return match.group(0)
-        return json.dumps(value, ensure_ascii=False)[1:-1]
+        return _json_str(value)
 
     return lambda text: ANY_TOKEN_RE.sub(_sub, text)
 
@@ -193,17 +207,19 @@ class StreamRestorer:
         r"|&l?t?|\\(?:u0?0?3?)?)$"
     )
 
-    def __init__(self, restore: Transform) -> None:
+    def __init__(self, restore: Transform, mapping: Mapping | None = None) -> None:
         self._restore = restore
+        # With surrogates, a fake ("Gaspard Castellan") can split too.
+        self._mapping = mapping or _mapping_of(restore)
         self._buf = ""
 
     def feed(self, fragment: str) -> str:
         self._buf += fragment
         m = self._PARTIAL.search(self._buf)
-        if m:
-            safe, self._buf = self._buf[: m.start()], self._buf[m.start() :]
-        else:
-            safe, self._buf = self._buf, ""
+        cut = m.start() if m else len(self._buf)
+        if self._mapping is not None:
+            cut = min(cut, len(self._buf) - self._mapping.hold_back(self._buf))
+        safe, self._buf = self._buf[:cut], self._buf[cut:]
         return self._restore(safe)
 
     def flush(self) -> str:
@@ -224,12 +240,14 @@ class StreamState:
     def __init__(self, restore: Transform) -> None:
         self._restore = restore
         self._json_restore = json_escaped(restore)
+        self._mapping = _mapping_of(restore)
         self._channels: dict[tuple, StreamRestorer] = {}
 
     def feed(self, key: tuple, fragment: str, *, json_text: bool = False) -> str:
         restorer = self._channels.get(key)
         if restorer is None:
-            restorer = StreamRestorer(self._json_restore if json_text else self._restore)
+            restorer = StreamRestorer(self._json_restore if json_text else self._restore,
+                                      self._mapping)
             self._channels[key] = restorer
         return restorer.feed(fragment)
 
