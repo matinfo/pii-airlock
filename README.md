@@ -341,6 +341,14 @@ For higher-volume/self-hosted setups, `mapping_backend: file` can be useful for
 debugging or operational inspection. `memory` stays the safest default for local
 use because mappings are ephemeral.
 
+Mapping files hold the real values, so the file backend **encrypts them at rest**
+(AES-256-GCM, key derived from `token.key` in the state directory). A copied or
+backed-up `maps/` directory is then useless without that key: keep `token.key` out of
+backups, and note that losing it makes pending mappings unreadable (they only live for
+one request). Plain files from older versions still load. Set `mapping_encryption: false`
+to write readable JSON for debugging; this is ignored in an untrusted project's config.
+Files from `pii-airlock scrub --map` stay plain JSON, as you restore them by hand.
+
 ### Built-in recognizers
 
 On top of Presidio, pii-airlock ships checksum-validated recognizers that work in

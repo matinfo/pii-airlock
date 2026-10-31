@@ -75,6 +75,7 @@ class Config:
     token_rotation: str = "day"
     mapping_backend: str = "memory"
     mapping_dir: str | None = None
+    mapping_encryption: bool = True  # file backend: encrypt mapping files at rest
     allow_list: list[str] = field(default_factory=list)
     deny_list: dict[str, list[str]] = field(default_factory=dict)
     custom_patterns: list[dict[str, Any]] = field(default_factory=list)
