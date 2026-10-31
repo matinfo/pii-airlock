@@ -180,7 +180,7 @@ endpoint (file uploads, audio, …) or a body that isn't JSON — is refused (40
 instead of being forwarded. Opt specific paths out with `passthrough_paths` if you
 know they carry no personal data.
 
-Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, Codex, Cursor, Continue, Aider, Gemini).
+Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, Codex, Cursor, Continue, Aider, Gemini, GitHub Copilot).
 
 ---
 
@@ -271,6 +271,18 @@ policy. The plugin cannot install the Python CLI, so install that first
 `SessionStart` message says why); `PII_AIRLOCK_PLUGIN_FAIL_OPEN=1` lets them through. Use
 the plugin *or* `install-hook`, not both, or each call is scanned twice. The launcher is a
 POSIX shell script: on Windows use `install-hook`.
+
+### GitHub Copilot
+
+```bash
+pii-airlock install-hook --target copilot    # Copilot CLI / cloud agent / VS Code: .github/hooks/
+```
+
+Guards Copilot's tool calls (`preToolUse`). Copilot CLI also reads a repo's
+`.claude/settings.json`, so if you already ran `install-hook` for Claude Code, skip this (both
+would scan each call twice). Prompts cannot be blocked by a Copilot hook: to guard chat in VS Code,
+add your own model as a *Custom Endpoint* pointing at the gateway. Copilot's default models and
+inline suggestions cannot be covered. Details and the VS Code config: [AGENTS.md](AGENTS.md#github-copilot).
 
 ### With `install-hook`
 
@@ -634,7 +646,7 @@ echo "Call John Smith at john@example.com" | pii-airlock scrub --map /tmp/test.p
 
 ## Community
 
-- 🧩 **[Integrate with your agent](AGENTS.md)** — Claude Code, Cursor, Codex, Gemini, Continue, Aider, …
+- 🧩 **[Integrate with your agent](AGENTS.md)** — Claude Code, GitHub Copilot, Cursor, Codex, Gemini, Continue, Aider, …
 - ❓ **Need help?** Open a **[bug report](https://github.com/matinfo/pii-airlock/issues/new/choose)** with:
   - `pii-airlock --version`
   - your install method (`pipx` or `pip`)
