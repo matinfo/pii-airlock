@@ -180,7 +180,7 @@ endpoint (file uploads, audio, …) or a body that isn't JSON — is refused (40
 instead of being forwarded. Opt specific paths out with `passthrough_paths` if you
 know they carry no personal data.
 
-Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, Codex, Cursor, Continue, Aider, Gemini).
+Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, Codex, Cursor, Continue, Aider, Gemini, GitHub Copilot).
 
 ---
 
@@ -320,6 +320,27 @@ detected** in that mode. `hook_daemon: off` disables the daemon. Windows: no dae
 **Not covered by hooks:** the *output* of a command or tool (e.g. `cat` in Bash, Grep
 matches, a fetched web page) reaches the model unchecked, as do binary files (images,
 PDFs). For full coverage, route the traffic through the gateway.
+
+---
+
+## GitHub Copilot
+
+```bash
+pii-airlock install-hook --target copilot    # writes .github/hooks/pii-airlock.json
+pii-airlock install-hook --target copilot --scope user   # ~/.copilot/hooks/ (all repos)
+```
+
+Guards Copilot's **tool calls** (`preToolUse`: shell commands, edits, file reads, web fetches, MCP
+calls) in the Copilot CLI, the cloud agent and VS Code agent mode.
+
+- **Already ran `pii-airlock install-hook` (project scope) for Claude Code?** Skip this: Copilot
+  CLI also reads the repo's `.claude/settings.json`, and both would scan each call twice. The
+  Claude Code *plugin* and `--scope user` do not write that file, so they do not reach Copilot.
+- **Chat in VS Code:** a hook cannot block prompts, so add your own model as a *Custom Endpoint*
+  that points at the gateway (config in [AGENTS.md](AGENTS.md#github-copilot)).
+- **Not covered:** Copilot's default models and inline suggestions.
+
+Written from GitHub's hook specs; not yet run against a live Copilot session.
 
 ---
 
@@ -634,7 +655,7 @@ echo "Call John Smith at john@example.com" | pii-airlock scrub --map /tmp/test.p
 
 ## Community
 
-- 🧩 **[Integrate with your agent](AGENTS.md)** — Claude Code, Cursor, Codex, Gemini, Continue, Aider, …
+- 🧩 **[Integrate with your agent](AGENTS.md)** — Claude Code, GitHub Copilot, Cursor, Codex, Gemini, Continue, Aider, …
 - ❓ **Need help?** Open a **[bug report](https://github.com/matinfo/pii-airlock/issues/new/choose)** with:
   - `pii-airlock --version`
   - your install method (`pipx` or `pip`)
