@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
 ### Added
 - Claude Code plugin: `/plugin marketplace add matinfo/pii-airlock`, then
   `/plugin install pii-airlock@pii-airlock`. Registers the hooks, adds a `/pii-airlock:setup`
@@ -228,7 +230,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-hook`.
 - Config override chain: bundled defaults → user → project → CLI flags.
 
-[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/matinfo/pii-airlock/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/matinfo/pii-airlock/compare/v0.2.3...v0.4.0
 [0.2.3]: https://github.com/matinfo/pii-airlock/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/matinfo/pii-airlock/compare/v0.2.1...v0.2.2
