@@ -77,11 +77,10 @@ hook_on_error: closed
 hook_max_file_bytes: 2000000
 
 # Hooks start a new process per tool call, and loading the spaCy models takes
-# 0.5-3 s each time. The daemon keeps them loaded (Unix socket in a user-only
-# directory; nothing leaves the machine):
+# 0.5-3 s each time. The daemon keeps them loaded (a Unix socket in a user-only
+# directory, or loopback TCP with a secret token on Windows; nothing leaves the machine):
 #   auto -> use the daemon, starting it in the background when it is not running
 #   off  -> always analyze in the hook process
-# Not available on Windows (hooks analyze in-process there).
 hook_daemon: auto
 
 # The daemon exits after this many idle minutes, freeing the models' memory.

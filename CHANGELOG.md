@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The hook daemon now runs on Windows too, so hooks take ~60 ms there instead of 0.5-3 s per call.
+  It uses loopback TCP with a secret token (a file only the user can read); the client checks
+  the daemon's proof of the token before sending any text, so a process on a stale port never
+  sees a request. Unix sockets stay the transport elsewhere. `pii-airlock daemon status` shows
+  which one is in use.
+
 ## [0.6.0] - 2026-10-31
 
 ### Added
