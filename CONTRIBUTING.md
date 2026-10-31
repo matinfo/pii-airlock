@@ -23,6 +23,7 @@ Both must pass. CI runs them on Linux (Python 3.10–3.14) and on macOS + Window
 
 - Detection changes: run `python -m tests.eval.run_eval -v` (needs `en_core_web_sm`,
   `fr_core_news_sm`, `de_core_news_sm` and `it_core_news_sm`) and add a labeled case to `tests/eval/corpus.jsonl`; CI gates on it.
+  A weekly job also gates the GLiNER backend (`--backend gliner`, needs `pii-airlock[gliner]`).
 - Tests stub Presidio/spaCy, so they need no model download and no network.
 - Keep new code lint-clean and add tests for new behavior.
 - Match the surrounding style (type hints, `from __future__ import annotations`,

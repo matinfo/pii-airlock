@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Digit groups inside an IBAN or card number are no longer also reported as a phone number.
 
 ### Changed
+- A weekly CI job (`eval-gliner.yml`, also manual) runs the eval with the GLiNER backend
+  against `tests/eval/thresholds-gliner.json`, without the torch install on every push.
 - The eval corpus covers German and Italian too (`de_core_news_sm`, `it_core_news_sm`).
 
 ## [0.4.0] - 2026-10-31

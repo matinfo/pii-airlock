@@ -33,6 +33,7 @@ from pii_scrub.engine import ScrubEngine
 HERE = Path(__file__).parent
 CORPUS = HERE / "corpus.jsonl"
 THRESHOLDS = HERE / "thresholds.json"
+THRESHOLDS_BY_BACKEND = {"gliner": HERE / "thresholds-gliner.json"}
 SMALL_MODELS = {
     "en": "en_core_web_sm", "fr": "fr_core_news_sm",
     "de": "de_core_news_sm", "it": "it_core_news_sm",
@@ -157,7 +158,8 @@ def check_gate(report: Report, thresholds: dict) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--gate", action="store_true", help="exit 1 if below thresholds.json")
+    ap.add_argument("--gate", action="store_true",
+                    help="exit 1 if below thresholds.json (thresholds-gliner.json for gliner)")
     ap.add_argument("-v", "--verbose", action="store_true", help="list misses and extras")
     ap.add_argument("--models", help="lang=model pairs, e.g. en=en_core_web_lg,fr=fr_core_news_lg")
     ap.add_argument("--backend", choices=["spacy", "gliner"], default="spacy")
@@ -173,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     report = evaluate(load_corpus(), models, args.backend)
     print(format_report(report, args.verbose))
     if args.gate:
-        failures = check_gate(report, json.loads(THRESHOLDS.read_text("utf-8")))
+        path = THRESHOLDS_BY_BACKEND.get(args.backend, THRESHOLDS)
+        failures = check_gate(report, json.loads(path.read_text("utf-8")))
         if failures:
             print("\nGATE FAILED:\n  " + "\n  ".join(failures), file=sys.stderr)
             return 1
