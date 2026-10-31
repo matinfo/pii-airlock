@@ -436,3 +436,19 @@ def test_bad_token_settings_fail_at_startup():
     with pytest.raises(ValueError, match="token_rotation"):
         build_app(Config(token_rotation="hourly"), engine=FakeEngine(),
                   client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: None)))
+
+
+def test_blocked_entity_is_refused_without_echoing_the_value():
+    from pii_scrub.engine import PolicyBlocked
+
+    class BlockingEngine(FakeEngine):
+        def scrub_all(self, run, mapping, texts=None):
+            raise PolicyBlocked(__import__("collections").Counter({"IBAN_CODE": 1}))
+
+    hits = []
+    transport = httpx.MockTransport(lambda r: hits.append(r) or httpx.Response(200, json={}))
+    app = build_app(engine=BlockingEngine(), client=httpx.AsyncClient(transport=transport))
+    resp = _client(app).post("/openai/v1/chat/completions", json={
+        "model": "m", "messages": [{"role": "user", "content": "pay FR7630006000011234567890189"}]})
+    assert resp.status_code == 403 and "IBAN_CODE×1" in resp.text
+    assert "FR76" not in resp.text and hits == []

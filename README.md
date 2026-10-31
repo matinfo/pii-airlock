@@ -318,6 +318,7 @@ models:
   fr: fr_core_news_lg
 score_threshold: 0.5
 entities: []          # empty = all entities Presidio recognizes, minus exclude_entities
+entity_actions: {}    # per type: tokenize | redact | allow | block (see Per-project policy)
 exclude_entities: [DATE_TIME, URL, NRP, US_DRIVER_LICENSE, US_BANK_NUMBER,
                    US_PASSPORT, IN_VEHICLE_REGISTRATION]  # noisy in code; [] keeps all
 score_thresholds: {}  # per-entity minimum, e.g. {PERSON: 0.7}
@@ -379,6 +380,34 @@ custom_patterns:
 
 Hooks apply the policy of the project Claude Code is working in. Every detection
 message shows the one-command fix for a false positive.
+
+#### What happens to each entity type
+
+By default every detected entity is **tokenized** (reversible). Choose per type:
+
+| Action | Effect |
+|---|---|
+| `tokenize` | token or fake, restored in the response (default) |
+| `redact` | irreversible `[IBAN_CODE]`; the value is never kept, not even in a mapping file |
+| `allow` | left as is and not flagged (what `exclude_entities` does for its list) |
+| `block` | the gateway answers **403** and sends nothing, `scrub` writes nothing, hooks **deny** (even with `hook_decision: ask`) and block prompts (even with `prompt_decision: warn`); messages name the type and count, never the value |
+
+```bash
+pii-airlock action IBAN_CODE redact          # this project
+pii-airlock action CREDIT_CARD block --scope user
+```
+
+```yaml pii-airlock
+entity_actions:
+  IBAN_CODE: redact
+  SECRET: block        # API keys and passwords never leave the machine
+  LOCATION: allow
+```
+
+Layers accumulate (user policy + project policy); an explicit action beats
+`exclude_entities`. Names found elsewhere in the text keep following their person:
+with `EMAIL_ADDRESS: allow`, `marie@acme.fr` stays but a bare `marie` that
+matches a detected "Marie Dubois" is still tokenized.
 
 ### Adding a language
 

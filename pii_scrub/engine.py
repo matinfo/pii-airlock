@@ -10,8 +10,8 @@ from __future__ import annotations
 import hashlib
 import re
 import threading
-from collections import OrderedDict
-from collections.abc import Callable, Iterable
+from collections import Counter, OrderedDict
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
 from functools import cached_property
 from typing import TypeVar
@@ -21,6 +21,18 @@ from .mapping import Mapping
 from .recognizers import Finding, detect_builtin, detect_fallback
 
 T = TypeVar("T")
+
+
+class PolicyBlocked(Exception):
+    """Text holds an entity whose `entity_actions` policy is `block`.
+
+    Not a RuntimeError: callers report it as a refusal, not a detection failure.
+    """
+
+    def __init__(self, found: Counter) -> None:
+        self.found = found
+        summary = ", ".join(f"{t}×{n}" for t, n in found.most_common())
+        super().__init__(f"blocked by policy (entity_actions): {summary}")
 
 
 @dataclass
@@ -143,7 +155,9 @@ class ScrubEngine:
         rules = self._rules
         found = self._analyze(text, language)
         found += _propagate(text, found, known)
-        return rules.filter(text, found) + rules.match(text)
+        cfg = self.config
+        return [d for d in rules.filter(text, found) + rules.match(text)
+                if cfg.action_for(d.entity_type) != "allow"]
 
     def _analyze(self, text: str, language: str | None = None) -> list[Detection]:
         """Model (Presidio) detections above the configured score threshold.
@@ -238,9 +252,9 @@ class ScrubEngine:
                     ))
 
     def _keep(self, entity_type: str, score: float) -> bool:
-        """Apply `exclude_entities` (unless asked for in `entities`) and thresholds."""
+        """Drop allowed entities (see Config.action_for), apply thresholds."""
         cfg = self.config
-        if entity_type in cfg.exclude_entities and entity_type not in cfg.entities:
+        if cfg.action_for(entity_type) == "allow":
             return False
         return score >= cfg.score_thresholds.get(entity_type, cfg.score_threshold)
 
@@ -255,7 +269,19 @@ class ScrubEngine:
         Overlapping detections are de-duplicated (highest score wins); spans are
         replaced right-to-left so earlier offsets stay valid.
         """
-        return apply_detections(text, self.detect(text, language, mapping.items()), mapping)
+        detections = self.detect(text, language, mapping.items())
+        self._check_blocked(detections)
+        return apply_detections(text, detections, mapping, self._redacted())
+
+    def _redacted(self) -> frozenset[str]:
+        return frozenset(e for e, a in self.config.entity_actions.items() if a == "redact")
+
+    def _check_blocked(self, detections: Iterable[Detection]) -> None:
+        """Raise PolicyBlocked if any detection's entity has the `block` action."""
+        blocked = Counter(d.entity_type for d in detections
+                          if self.config.action_for(d.entity_type) == "block")
+        if blocked:
+            raise PolicyBlocked(blocked)
 
     def scrub_all(
         self,
@@ -274,12 +300,13 @@ class ScrubEngine:
         """
         texts = list(dict.fromkeys(collect_texts(run) if texts is None else texts))
         self.prime(texts)
-        known = list(dict.fromkeys(
-            (d.entity_type, d.text(t)) for t in texts for d in self.detect(t)
-        ))
+        found = [(t, d) for t in texts for d in self.detect(t)]
+        self._check_blocked(d for _, d in found)  # before anything is minted
+        known = list(dict.fromkeys((d.entity_type, d.text(t)) for t, d in found))
         mapping.learn(known, texts)
+        redacted = self._redacted()
         return run(lambda t: apply_detections(
-            t, self.detect(t, known=[*known, *mapping.items()]), mapping
+            t, self.detect(t, known=[*known, *mapping.items()]), mapping, redacted
         ))
 
 
@@ -382,15 +409,28 @@ def _term_re(term: str) -> re.Pattern:
     return re.compile(r"(?<!\w)" + re.escape(str(term).strip()) + r"(?!\w)", re.IGNORECASE)
 
 
-def apply_detections(text: str, detections: list[Detection], mapping: Mapping) -> str:
-    """Replace `detections` in `text` with tokens from `mapping`."""
+def apply_detections(
+    text: str,
+    detections: list[Detection],
+    mapping: Mapping,
+    redact: Collection[str] = (),
+) -> str:
+    """Replace `detections` in `text` with tokens from `mapping`.
+
+    Entities in `redact` become ``[ENTITY]`` instead: irreversible, and the
+    value is never stored in the mapping (nor in a saved mapping file).
+    """
     mapping.reserve(text)
     spans = sorted(_dedupe_overlaps(detections), key=lambda x: x.start)
     # Mint in reading order (<PERSON_1> is the first person mentioned), then
     # build the output in one pass.
     parts, pos = [], 0
     for d in spans:
-        parts += [text[pos : d.start], mapping.token_for(d.entity_type, text[d.start : d.end])]
+        if d.entity_type in redact:
+            replacement = f"[{d.entity_type}]"
+        else:
+            replacement = mapping.token_for(d.entity_type, text[d.start : d.end])
+        parts += [text[pos : d.start], replacement]
         pos = d.end
     parts.append(text[pos:])
     return "".join(parts)

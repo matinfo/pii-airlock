@@ -8,8 +8,9 @@ Override chain (lowest -> highest priority):
     ./.claude/skills/pii-airlock/SKILL.md      (policy block)
     CLI flags (applied by the caller)
 
-`allow_list`, `deny_list` and `custom_patterns` accumulate across layers (your
-personal allow list + the project's), every other key is overridden.
+`allow_list`, `deny_list`, `custom_patterns` and `entity_actions` accumulate
+across layers (your personal allow list + the project's), every other key is
+overridden.
 """
 
 from __future__ import annotations
@@ -76,6 +77,20 @@ class Config:
     allow_list: list[str] = field(default_factory=list)
     deny_list: dict[str, list[str]] = field(default_factory=dict)
     custom_patterns: list[dict[str, Any]] = field(default_factory=list)
+    entity_actions: dict[str, str] = field(default_factory=dict)
+
+    def action_for(self, entity_type: str) -> str:
+        """What to do with a detected entity: tokenize, redact, allow or block.
+
+        `entity_actions` wins; otherwise entities in `exclude_entities` are
+        allowed unless asked for in `entities`; everything else is tokenized.
+        """
+        action = self.entity_actions.get(entity_type)
+        if action:
+            return action
+        if entity_type in self.exclude_entities and entity_type not in self.entities:
+            return "allow"
+        return "tokenize"
 
     def merged_with(self, data: dict[str, Any]) -> Config:
         """Return a copy with non-None keys from `data` applied."""
@@ -93,9 +108,31 @@ class Config:
             clean["score_thresholds"] = {
                 str(k).upper(): float(v) for k, v in (clean["score_thresholds"] or {}).items()
             }
+        if "entity_actions" in clean:
+            clean["entity_actions"] = {
+                **self.entity_actions, **normalize_actions(clean["entity_actions"])
+            }
         if "custom_patterns" in clean:
             clean["custom_patterns"] = [*self.custom_patterns, *clean["custom_patterns"]]
         return replace(self, **clean)
+
+
+ACTIONS = ("tokenize", "redact", "allow", "block")
+
+
+def normalize_actions(value: Any) -> dict[str, str]:
+    """``{entity: action}`` with upper-case entities; rejects unknown actions."""
+    if not isinstance(value, dict):
+        raise ValueError("entity_actions must be a mapping ENTITY: action")
+    out = {}
+    for entity, action in value.items():
+        action = str(action).strip().lower()
+        if action not in ACTIONS:
+            raise ValueError(
+                f"entity_actions: {entity}: {action!r} is not one of {', '.join(ACTIONS)}"
+            )
+        out[str(entity).strip().upper()] = action
+    return out
 
 
 def _union(base: list[str], extra: list[str]) -> list[str]:

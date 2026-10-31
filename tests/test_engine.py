@@ -5,6 +5,8 @@ tested fast and offline. A live end-to-end check belongs in the verification
 suite (requires `pii-airlock download-models`).
 """
 
+import pytest
+
 from pii_scrub.engine import Detection, ScrubEngine, _dedupe_overlaps
 from pii_scrub.mapping import Mapping
 
@@ -284,3 +286,54 @@ def test_scrub_all_uses_given_texts_without_a_dry_run():
 
     out = eng.scrub_all(run, Mapping(), texts=["Dupont, from Jean Dupont"])
     assert len(calls) == 1 and "Dupont" not in out
+
+
+def _actions_engine(actions, **config):
+    from pii_scrub.config import Config
+
+    cfg = Config(languages=["en"], builtin_recognizers=False,
+                 **config).merged_with({"entity_actions": actions})
+    eng = _engine_returning([("PERSON", 0, 4, 0.9), ("IBAN_CODE", 5, 9, 0.9)])
+    eng.config = cfg
+    return eng
+
+
+def test_redact_is_irreversible_and_never_stored():
+    eng = _actions_engine({"iban_code": "redact"})
+    m = Mapping()
+    out = eng.scrub("Jean 1234 ok", m)
+    assert out == "<PERSON_1> [IBAN_CODE] ok"
+    assert m.items() == [("PERSON", "Jean")]           # the IBAN is nowhere in the mapping
+    assert "1234" not in str(m.to_dict())
+
+
+def test_allow_overrides_default_and_replaces_exclusion():
+    eng = _actions_engine({"PERSON": "allow"})
+    assert [d.entity_type for d in eng.detect("Jean 1234 ok")] == ["IBAN_CODE"]
+    # exclude_entities keeps working, and an explicit action beats it
+    eng = _engine_returning([("URL", 0, 5, 0.9)])
+    assert eng.detect("x" * 10) == []
+    eng.config = eng.config.merged_with({"entity_actions": {"URL": "tokenize"}})
+    assert [d.entity_type for d in eng.detect("x" * 10)] == ["URL"]
+
+
+def test_block_raises_before_anything_is_minted():
+    from pii_scrub.engine import PolicyBlocked
+
+    eng = _actions_engine({"IBAN_CODE": "block"})
+    m = Mapping()
+    with pytest.raises(PolicyBlocked, match=r"IBAN_CODE×1") as exc:
+        eng.scrub_all(lambda f: [f("fine Jean 1234 ok")], m)
+    assert "1234" not in str(exc.value) and len(m) == 0
+    with pytest.raises(PolicyBlocked):
+        eng.scrub("Jean 1234 ok", Mapping())
+
+
+def test_invalid_action_is_rejected_and_actions_accumulate():
+    from pii_scrub.config import Config
+
+    with pytest.raises(ValueError, match="not one of"):
+        Config().merged_with({"entity_actions": {"PERSON": "delete"}})
+    cfg = Config().merged_with({"entity_actions": {"person": "redact"}}).merged_with(
+        {"entity_actions": {"IBAN_CODE": "block"}})
+    assert cfg.entity_actions == {"PERSON": "redact", "IBAN_CODE": "block"}

@@ -91,6 +91,25 @@ def add_deny(path: Path, term: str, entity: str = DEFAULT_DENY_ENTITY) -> bool:
     return _update(path, change)
 
 
+def set_action(path: Path, entity: str, action: str) -> bool:
+    """Set the `entity_actions` policy for `entity`. Returns False if unchanged."""
+    from .config import normalize_actions
+
+    try:
+        (entity, action), = normalize_actions({entity: action}).items()
+    except ValueError as exc:
+        raise PolicyError(str(exc)) from None
+
+    def change(data: dict) -> bool:
+        actions = dict(data.get("entity_actions") or {})
+        if actions.get(entity) == action:
+            return False
+        actions[entity] = action
+        data["entity_actions"] = actions
+        return True
+    return _update(path, change)
+
+
 def normalize_deny(value: Any) -> dict[str, list[str]]:
     """``deny_list`` accepts a plain list (-> CONFIDENTIAL) or ``{ENTITY: [terms]}``."""
     if not value:
@@ -170,6 +189,10 @@ Read by pii-airlock. Edit by hand or with `pii-airlock allow "Acme SA"` /
   case-insensitively, as whole words.
 - `custom_patterns`: regexes for project identifiers, e.g.
   `- {{entity: CONTRACT_ID, regex: 'CT-\\d{{6}}'}}`.
+- `entity_actions`: what happens to each entity type: `tokenize` (default,
+  reversible), `redact` (irreversible `[TYPE]`, never stored), `allow` (left
+  alone) or `block` (the request or prompt is refused). Set with
+  `pii-airlock action IBAN_CODE redact`.
 - Any other pii-airlock setting (`entities`, `score_threshold`,
   `hook_decision`, `prompt_decision`, ...) can be set here for this project.
 

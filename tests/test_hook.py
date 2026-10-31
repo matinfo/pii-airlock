@@ -288,3 +288,40 @@ def test_regex_fallback_finds_patterns_without_models(monkeypatch, capsys):
         {"tool_name": "Bash", "tool_input": {"command": "curl -d to=jean@acme.fr x"}})))
     common.run_pre_tool_use()  # would raise on a missing model if it loaded spaCy
     assert "EMAIL_ADDRESS" in capsys.readouterr().out
+
+
+class _IbanEngine(FakeEngine):
+    """Flags 'FR76' as IBAN_CODE and 'jean@acme.fr' as EMAIL_ADDRESS."""
+
+    def detect(self, text, language=None):
+        out = super().detect(text, language)
+        i = text.find("FR76")
+        return out + ([] if i < 0 else [Detection("IBAN_CODE", i, i + 4, 1.0)])
+
+
+def test_blocked_entity_denies_even_when_hooks_only_ask(monkeypatch, capsys):
+    out = _run(common.run_pre_tool_use,
+               {"tool_name": "Bash", "tool_input": {"command": "pay FR76 now"}},
+               monkeypatch, capsys, engine=_IbanEngine,
+               entity_actions={"IBAN_CODE": "block"}, hook_decision="ask")
+    hso = json.loads(out)["hookSpecificOutput"]
+    assert hso["permissionDecision"] == "deny"
+    assert "blocked by policy" in hso["permissionDecisionReason"]
+    assert "FR76" not in hso["permissionDecisionReason"]
+
+
+def test_blocked_entity_blocks_prompt_even_in_warn_mode(monkeypatch, capsys):
+    out = _run(common.run_user_prompt_submit, {"prompt": "pay FR76 to jean@acme.fr"},
+               monkeypatch, capsys, engine=_IbanEngine, prompt_decision="warn",
+               entity_actions={"IBAN_CODE": "block", "EMAIL_ADDRESS": "redact"})
+    payload = json.loads(out)
+    assert payload["decision"] == "block"
+    assert "pay [IBAN_CODE] to [EMAIL_ADDRESS]" in payload["reason"]
+    assert "prompt_decision: warn" not in payload["reason"]
+
+
+def test_unblocked_hits_keep_the_normal_flow(monkeypatch, capsys):
+    out = _run(common.run_pre_tool_use,
+               {"tool_name": "Bash", "tool_input": {"command": "pay FR76 now"}},
+               monkeypatch, capsys, engine=_IbanEngine, entity_actions={"EMAIL_ADDRESS": "block"})
+    assert json.loads(out)["hookSpecificOutput"]["permissionDecision"] == "ask"

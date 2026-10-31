@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 
 from .config import Config, load_config
+from .engine import PolicyBlocked
 from .mapping_store import build_mapping_store
 from .payload import (
     StreamState,
@@ -156,6 +157,13 @@ def build_app(
             try:
                 scrubbed = await run_in_threadpool(
                     _scrub_request, engine, payload, adapter, mapping
+                )
+            except PolicyBlocked as exc:
+                # The value itself is never echoed: only entity types and counts.
+                return Response(
+                    f"pii-airlock: request not sent — {exc}. Remove it from the "
+                    "conversation, or change `entity_actions` in your policy.",
+                    status_code=403,
                 )
             except RuntimeError as exc:
                 # e.g. spaCy model not installed — fail loud, don't leak by

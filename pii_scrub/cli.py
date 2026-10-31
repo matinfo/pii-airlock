@@ -93,7 +93,8 @@ def scrub(
     out: Path | None = typer.Option(None, "-o", "--out", help="Output file; omit for stdout."),
 ) -> None:
     """Replace PII with stable tokens, optionally saving a reversible mapping."""
-    from .engine import ScrubEngine, collect_texts  # lazy: avoids loading Presidio for --help
+    # lazy: avoids loading Presidio for --help
+    from .engine import PolicyBlocked, ScrubEngine, collect_texts
 
     config = _build_config(lang, threshold)
     handler_cls = get_handler_class(file, fmt)
@@ -119,6 +120,9 @@ def scrub(
             result = run(lambda t: engine.scrub(t, mapping))
     except MissingExtra as exc:
         typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    except PolicyBlocked as exc:
+        typer.echo(f"Not scrubbed, nothing written: {exc}.", err=True)
         raise typer.Exit(code=1) from None
 
     _write_output(out, result)
@@ -522,6 +526,8 @@ def policy_show() -> None:
         typer.echo("deny_list:       -")
     for pattern in config.custom_patterns:
         typer.echo(f"custom pattern:  {pattern.get('entity')}  {pattern.get('regex')}")
+    for entity, what in config.entity_actions.items():
+        typer.echo(f"action {entity}: {what}")
     typer.echo(f"hook_decision: {config.hook_decision}   prompt_decision: "
                f"{config.prompt_decision}   hook_on_error: {config.hook_on_error}")
 
@@ -555,6 +561,22 @@ def deny(
         typer.echo(f"Denied {term!r} (as {entity.upper()}) in {path}")
     else:
         typer.echo(f"{term!r} is already in the deny list of {path}")
+
+
+@app.command()
+def action(
+    entity: str = typer.Argument(..., help="Entity type, e.g. IBAN_CODE, PERSON, SECRET."),
+    what: str = typer.Argument(..., help="tokenize | redact | allow | block"),
+    scope: str = typer.Option("project", "--scope", help="project | user"),
+) -> None:
+    """Choose what happens to an entity type: tokenize, redact, allow or block."""
+    from .policy import set_action
+
+    path = _scope_path(scope)
+    if _policy_change(set_action, path, entity, what):
+        typer.echo(f"{entity.upper()} -> {what.lower()} in {path}")
+    else:
+        typer.echo(f"{entity.upper()} is already {what.lower()} in {path}")
 
 
 @hook_app.command("pre-tool-use")

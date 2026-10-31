@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   silently letting the input through.
 
 ### Added
+- Per-entity policy `entity_actions: {ENTITY: tokenize|redact|allow|block}` and
+  `pii-airlock action ENTITY ACTION [--scope user]`: `redact` writes an irreversible
+  `[ENTITY]` that never enters a mapping; `allow` ignores the type; `block` refuses
+  the request (gateway 403, `scrub` exit 1 with nothing written, hooks deny and block
+  prompts regardless of `hook_decision` / `prompt_decision`) without echoing the value.
+  Accumulates across user and project policy; `exclude_entities` is now shorthand
+  for `allow`.
 - `ner_backend: gliner`: one multilingual GLiNER model (`gliner_model`, default
   `urchade/gliner_multi_pii-v1`) instead of a spaCy model per language; extra
   `pii-airlock[gliner]`, model fetched by `download-models`, shown in `doctor`. Long

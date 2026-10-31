@@ -177,6 +177,11 @@ def _summary(found: Counter) -> str:
     return ", ".join(f"{t}×{n}" for t, n in found.most_common())
 
 
+def _blocked(config: Config, found: Counter) -> Counter:
+    """Entities whose `entity_actions` policy is `block`: never sent, never asked."""
+    return Counter({t: n for t, n in found.items() if config.action_for(t) == "block"})
+
+
 def _emit(payload: dict) -> None:
     json.dump(payload, sys.stdout, ensure_ascii=False)
     sys.stdout.write("\n")
@@ -225,6 +230,11 @@ def run_pre_tool_use() -> None:
             f"pii-airlock: PII detected in {tool} input — {_summary(found)}. "
             f"Review before this leaves your machine. {_FALSE_POSITIVE_HINT}"
         )
+        blocked = _blocked(config, found)
+        if blocked:
+            decision = "deny"
+            reason = (f"pii-airlock: {tool} input blocked by policy (entity_actions) — "
+                      f"{_summary(blocked)}. Use a placeholder instead.")
     _emit(
         {
             "hookSpecificOutput": {
@@ -248,10 +258,14 @@ def run_user_prompt_submit() -> None:
                 raise config_error
             results = _analyze(config, event, [prompt])
             found = _types(results)
+            blocked = _blocked(config, found)
             scrubbed = None
             if len(results) == 1:  # long pastes are chunked: count only
-                # Same tokens as the gateway would send, so the two can be mixed.
-                scrubbed = apply_detections(prompt, results[0][1], Mapping(token_key(config)))
+                # Same tokens as the gateway would send, so the two can be mixed;
+                # redacted and blocked entities become [ENTITY].
+                hidden = {e for e, a in config.entity_actions.items() if a == "redact"}
+                scrubbed = apply_detections(prompt, results[0][1], Mapping(token_key(config)),
+                                            hidden | set(blocked))
     except _FAILURES as exc:
         if config.hook_on_error == "open":
             return
@@ -264,12 +278,16 @@ def run_user_prompt_submit() -> None:
     if not found:
         return
     summary = _summary(found)
-    if block:
+    if block or blocked:
         reason = f"pii-airlock blocked your prompt: PII detected — {summary}."
+        if blocked:
+            reason = (f"pii-airlock blocked your prompt: {_summary(blocked)} is blocked by "
+                      f"policy (entity_actions); also found: {summary}.")
         if scrubbed is not None:
             reason += f"\n\nScrubbed version you can send instead:\n\n{scrubbed}"
-        reason += (f"\n\n{_FALSE_POSITIVE_HINT} Set `prompt_decision: warn` to send prompts "
-                   "with a warning instead.")
+        reason += f"\n\n{_FALSE_POSITIVE_HINT}"
+        if not blocked:
+            reason += " Set `prompt_decision: warn` to send prompts with a warning instead."
         _emit({"decision": "block", "reason": reason})
         return
     _emit(

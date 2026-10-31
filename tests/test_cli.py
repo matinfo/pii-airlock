@@ -135,3 +135,28 @@ def test_doctor_exits_nonzero_when_missing_requirements(monkeypatch):
     rendered = "\n".join(text for text, _ in out)
     assert "[fail] gateway deps:" in rendered
     assert "[fail] installed models:" in rendered
+
+
+def test_scrub_refuses_a_file_with_a_blocked_entity(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from typer.testing import CliRunner
+
+    from pii_scrub.engine import ScrubEngine
+
+    def analyze(text, language, entities):
+        i = text.find("jean@acme.fr")
+        return [] if i < 0 else [SimpleNamespace(entity_type="EMAIL_ADDRESS", start=i,
+                                                 end=i + 12, score=1.0)]
+
+    # No spaCy model needed (nor the machine's own config): the analyzer is stubbed.
+    monkeypatch.setattr(ScrubEngine, "_analyzer", SimpleNamespace(analyze=analyze))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    (tmp_path / ".pii-airlock.yaml").write_text("entity_actions: {EMAIL_ADDRESS: block}\n")
+    monkeypatch.chdir(tmp_path)
+    src = tmp_path / "in.txt"
+    src.write_text("mail jean@acme.fr please")
+    result = CliRunner().invoke(cli.app, ["scrub", str(src), "--no-map", "-o",
+                                         str(tmp_path / "out.txt")])
+    assert result.exit_code == 1 and "EMAIL_ADDRESS×1" in result.output
+    assert not (tmp_path / "out.txt").exists()
