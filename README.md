@@ -367,7 +367,10 @@ every language and need no model:
 | `FR_NIR` | French social security number | mod-97 key (incl. Corsica 2A/2B) |
 | `CH_AHV` | Swiss AHV/AVS number `756.xxxx.xxxx.xx` | EAN-13 check digit |
 | `FR_SIRET` / `FR_SIREN` | French business IDs (sole traders are people) | Luhn; SIREN needs the keyword |
-| `PHONE_NUMBER` | FR/CH national formats (`06 12 34 56 78`, `079 123 45 67`) | format |
+| `DE_TAX_ID` | German tax ID (Steuer-IdNr.), needs the keyword (`Steuer-ID`, `IdNr`) | ISO 7064 MOD 11,10 |
+| `DE_TAX_NUMBER` | German `Steuernummer` (`21/815/08150`), needs the keyword | format |
+| `IT_VAT_CODE` | Italian Partita IVA, with the `IT` prefix or a `P.IVA` keyword | Luhn |
+| `PHONE_NUMBER` | International `+CC …` in any language; FR/CH/DE/IT national formats (`06 12 34 56 78`, `079 123 45 67`, `030 12345678`, `333 1234567`) | format |
 | `SECRET` | AWS/GitHub/Slack/OpenAI/Anthropic/Google/Stripe keys, JWTs, private keys, URL passwords, `password=…` values | format |
 
 Exclude any of them with `exclude_entities`, or all with `builtin_recognizers: false`.
