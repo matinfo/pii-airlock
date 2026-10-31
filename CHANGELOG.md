@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A built-in rule now catches any `+CC` number.
 - Digit groups inside an IBAN or card number are no longer also reported as a phone number.
 
+### Added
+- Mapping files are encrypted at rest (AES-256-GCM, key derived from `token.key`) with the
+  file mapping backend. `mapping_encryption: false` opts out; existing plain files still load.
+  New dependency: `cryptography`.
+
 ### Changed
 - A weekly CI job (`eval-gliner.yml`, also manual) runs the eval with the GLiNER backend
   against `tests/eval/thresholds-gliner.json`, without the torch install on every push.

@@ -4,6 +4,7 @@ import os
 
 import pytest
 
+from pii_scrub.mapping import Mapping
 from pii_scrub.mapping_store import (
     FileMappingStore,
     InMemoryMappingStore,
@@ -67,3 +68,60 @@ def test_file_store_defaults_to_private_state_dir(tmp_path, monkeypatch):
     if os.name == "posix":  # Windows does not report POSIX modes
         assert stat.S_IMODE(root.stat().st_mode) == 0o700
     assert not (tmp_path / ".pii-airlock-maps").exists()  # nothing in the project dir
+
+
+def _filled():
+    m = Mapping()
+    m.token_for("PERSON", "Jean Dupont")
+    return m
+
+
+def test_file_store_encrypts_at_rest(tmp_path):
+    from pii_scrub.mapping_crypto import MAGIC, mapping_key
+
+    store = FileMappingStore(tmp_path, encrypt_key=mapping_key(b"k" * 32))
+    key = store.save(_filled())
+    raw = (tmp_path / f"{key}.pii-map.json").read_bytes()
+    assert raw.startswith(MAGIC) and b"Jean" not in raw
+    assert store.load(key).restore("<PERSON_1>") == "Jean Dupont"
+
+
+def test_encrypted_file_rejects_wrong_key(tmp_path):
+    from pii_scrub.mapping_crypto import MappingDecryptError, mapping_key
+
+    key = FileMappingStore(tmp_path, encrypt_key=mapping_key(b"a" * 32)).save(_filled())
+    with pytest.raises(MappingDecryptError):
+        FileMappingStore(tmp_path, encrypt_key=mapping_key(b"b" * 32)).load(key)
+    with pytest.raises(MappingDecryptError):
+        FileMappingStore(tmp_path).load(key)  # no key at all
+
+
+def test_encrypted_file_detects_tampering(tmp_path):
+    from pii_scrub.mapping_crypto import MappingDecryptError, mapping_key
+
+    store = FileMappingStore(tmp_path, encrypt_key=mapping_key(b"k" * 32))
+    key = store.save(_filled())
+    path = tmp_path / f"{key}.pii-map.json"
+    blob = bytearray(path.read_bytes())
+    blob[-1] ^= 1
+    path.write_bytes(bytes(blob))
+    with pytest.raises(MappingDecryptError):
+        store.load(key)
+
+
+def test_plain_files_still_load_with_encryption_on(tmp_path):
+    from pii_scrub.mapping_crypto import mapping_key
+
+    key = FileMappingStore(tmp_path).save(_filled())  # written before encryption
+    store = FileMappingStore(tmp_path, encrypt_key=mapping_key(b"k" * 32))
+    assert store.load(key).restore("<PERSON_1>") == "Jean Dupont"
+
+
+def test_factory_encrypts_by_default_and_can_opt_out(tmp_path):
+    from pii_scrub.mapping_crypto import is_sealed
+
+    for encrypt, sealed in ((True, True), (False, False)):
+        store = build_mapping_store("file", root=tmp_path / str(encrypt), encrypt=encrypt)
+        key = store.save(_filled())
+        raw = (tmp_path / str(encrypt) / f"{key}.pii-map.json").read_bytes()
+        assert is_sealed(raw) is sealed

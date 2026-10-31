@@ -24,6 +24,7 @@ from collections.abc import Callable, Iterable
 from itertools import count
 from pathlib import Path
 
+from . import mapping_crypto
 from . import surrogates as fakes
 
 # Matches any token this module mints, e.g. <PERSON_1>, <EMAIL_ADDRESS_12>.
@@ -286,8 +287,8 @@ class Mapping:
             "counters": self._counters,
         }
 
-    def save(self, path: str | Path) -> None:
-        """Write the mapping as JSON, owner-only.
+    def save(self, path: str | Path, *, encrypt_key: bytes | None = None) -> None:
+        """Write the mapping as JSON, owner-only; encrypted when `encrypt_key` is given.
 
         Created with mode 0600 from the start (no world-readable window) on
         POSIX. On Windows the mode argument is ignored by the OS, so the file
@@ -295,9 +296,11 @@ class Mapping:
         home directory. See the README security note.
         """
         path = Path(path)
-        data = json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+        data = json.dumps(self.to_dict(), ensure_ascii=False, indent=2).encode("utf-8")
+        if encrypt_key is not None:
+            data = mapping_crypto.seal(data, encrypt_key)
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        with os.fdopen(fd, "wb") as fh:
             fh.write(data)
         # O_CREAT's mode only applies when creating; tighten a pre-existing file too.
         try:
@@ -306,8 +309,16 @@ class Mapping:
             pass  # best effort (e.g. filesystems without POSIX perms)
 
     @classmethod
-    def load(cls, path: str | Path) -> Mapping:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    def load(cls, path: str | Path, *, encrypt_key: bytes | None = None) -> Mapping:
+        """Read a mapping; encrypted files need `encrypt_key`, plain JSON loads as is."""
+        raw = Path(path).read_bytes()
+        if mapping_crypto.is_sealed(raw):
+            if encrypt_key is None:
+                raise mapping_crypto.MappingDecryptError(
+                    f"{path} is encrypted: it can only be read by the gateway's mapping store"
+                )
+            raw = mapping_crypto.unseal(raw, encrypt_key)
+        data = json.loads(raw.decode("utf-8"))
         m = cls()
         m._token_to_value = dict(data.get("tokens", {}))
         m._entities = dict(data.get("entities", {}))
