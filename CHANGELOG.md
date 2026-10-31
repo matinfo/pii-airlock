@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-31
+
 ### Added
 - GitHub Copilot: `pii-airlock install-hook --target copilot` writes a `preToolUse` hook file
   for the Copilot CLI and cloud agent. The hook understands Copilot's payload (camelCase,
@@ -240,7 +242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `install-hook`.
 - Config override chain: bundled defaults → user → project → CLI flags.
 
-[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/matinfo/pii-airlock/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/matinfo/pii-airlock/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/matinfo/pii-airlock/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/matinfo/pii-airlock/compare/v0.2.3...v0.4.0
 [0.2.3]: https://github.com/matinfo/pii-airlock/compare/v0.2.2...v0.2.3
