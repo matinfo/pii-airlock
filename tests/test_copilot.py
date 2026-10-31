@@ -33,7 +33,6 @@ def test_copilot_payload_is_scanned_and_answered_in_copilot_format(monkeypatch, 
     assert seen == ["mail jean@acme.fr"]
     assert reply["permissionDecision"] in ("ask", "deny")
     assert "pii-airlock" in reply["permissionDecisionReason"]
-    assert "hookSpecificOutput" not in reply
 
 
 def test_copilot_tools_with_unknown_names_are_still_scanned(monkeypatch, capsys):
@@ -62,11 +61,45 @@ def test_copilot_view_scans_the_file_content(monkeypatch, capsys, tmp_path):
     assert "contact jean@acme.fr" in seen
 
 
-def test_claude_payload_keeps_the_claude_reply(monkeypatch, capsys):
+def test_one_reply_serves_claude_code_and_copilot(monkeypatch, capsys):
     event = {"tool_name": "Bash", "tool_input": {"command": "mail jean@acme.fr"}}
     reply, _ = _run(monkeypatch, capsys, event)
-    assert reply["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
-    assert "permissionDecision" not in reply
+    nested = reply["hookSpecificOutput"]
+    assert nested["hookEventName"] == "PreToolUse"
+    assert nested["permissionDecision"] == reply["permissionDecision"]
+    assert nested["permissionDecisionReason"] == reply["permissionDecisionReason"]
+
+
+def test_copilot_snake_case_alias_with_json_string_input(monkeypatch, capsys):
+    # PascalCase events (and .claude/settings.json hooks read by Copilot CLI) arrive
+    # as tool_name / tool_input, the input possibly still a JSON string.
+    event = {"hook_event_name": "PreToolUse", "tool_name": "bash",
+             "tool_input": json.dumps({"command": "mail jean@acme.fr"})}
+    reply, seen = _run(monkeypatch, capsys, event)
+    assert seen == ["mail jean@acme.fr"] and reply["permissionDecision"] in ("ask", "deny")
+
+
+@pytest.mark.parametrize("tool", ["ask_user", "bash", "create", "edit", "glob", "grep",
+                                  "powershell", "task", "view", "web_fetch", "web_search",
+                                  "str_replace_editor", "apply_patch", "rg", "update_todo"])
+def test_every_documented_copilot_tool_is_scanned(monkeypatch, capsys, tool):
+    event = {"toolName": tool, "toolArgs": json.dumps({"anything": "jean@acme.fr"})}
+    reply, seen = _run(monkeypatch, capsys, event)
+    assert seen == ["jean@acme.fr"] and reply is not None
+
+
+def test_known_tool_with_unfamiliar_arguments_is_still_scanned(monkeypatch, capsys):
+    # A harness may name a tool like Claude Code's but use other argument names.
+    event = {"tool_name": "Write", "tool_input": {"text": "jean@acme.fr"}}
+    _, seen = _run(monkeypatch, capsys, event)
+    assert seen == ["jean@acme.fr"]
+
+
+def test_claude_edit_still_ignores_the_file_path(monkeypatch, capsys):
+    event = {"tool_name": "Edit", "tool_input": {
+        "file_path": "/home/jean.dupont/a.txt", "old_string": "a", "new_string": "b"}}
+    _, seen = _run(monkeypatch, capsys, event, found=())
+    assert sorted(seen) == ["a", "b"]
 
 
 def test_install_copilot_is_idempotent(tmp_path, monkeypatch):

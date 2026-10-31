@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `toolArgs` as JSON text), scans every tool argument and answers in Copilot's format.
   AGENTS.md documents VS Code custom-endpoint models through the gateway and what stays
   uncovered (default models, inline suggestions, prompts in the CLI).
+- The `PreToolUse` reply now also carries top-level `permissionDecision` fields, which Copilot
+  reads (Claude Code ignores them); the hook also scans every argument of MCP and lower-case
+  (Copilot) tools, and accepts `tool_input` given as a JSON string.
 
 ## [0.5.0] - 2026-10-31
 

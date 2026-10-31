@@ -187,16 +187,31 @@ Give the full URL; the gateway forwards your key and scrubs the request:
 
 (`apiType: responses` works too, with `http://127.0.0.1:8745/openai/v1/responses`.)
 
-**Copilot CLI / cloud agent, hook.** `pii-airlock install-hook --target copilot` writes
-`.github/hooks/pii-airlock.json` (`--scope user`: `~/.copilot/hooks/`, or `$COPILOT_HOME`).
-It registers `preToolUse`; the same checks as for Claude Code apply (`hook_decision`,
-`entity_actions: block`, `hook_on_error`). Copilot's tool and argument names differ from
-Claude Code's, so every argument of every tool call is scanned. A hook timeout is fail-open in
-Copilot, so keep the daemon on (`hook_daemon: auto`, the default) to stay well under it. The
-cloud agent treats `ask` as `deny`.
+**Copilot CLI / cloud agent / VS Code agent mode, hook.** `pii-airlock install-hook --target copilot`
+writes `.github/hooks/pii-airlock.json` (`--scope user`: `~/.copilot/hooks/`, or `$COPILOT_HOME`).
+It registers `preToolUse` with no matcher, so it sees every tool call, and runs the same checks as
+for Claude Code (`hook_decision`, `entity_actions: block`, `hook_on_error`).
 
-> Written from GitHub's and VS Code's current docs; not yet exercised against a live Copilot
-> session. If a tool call slips through, open an issue with the hook payload.
+- **Payloads.** The hook reads both Copilot shapes: camelCase (`toolName`, `toolArgs` as JSON
+  text) and the snake_case alias (`tool_name`, `tool_input`, possibly still a JSON string).
+- **Tools.** Copilot's tools are `bash`, `powershell`, `view`, `edit`, `create`, `glob`, `grep`,
+  `web_fetch`, `web_search`, `task`, `ask_user`, `update_todo`, `str_replace_editor`,
+  `apply_patch`, `rg`, plus MCP tools. GitHub does not document their argument names, so **every
+  string argument of every one of them is scanned**; `view` also scans the file's content.
+- **Reply.** One JSON object carries both Copilot's top-level `permissionDecision` /
+  `permissionDecisionReason` and Claude Code's nested `hookSpecificOutput`. Each harness reads
+  its own part (Claude Code ignores the extra keys: checked with the `claude` CLI).
+- **Failure modes** (from GitHub's hooks reference). A hook that errors or exits 2 denies the
+  tool call, so detection failures fail closed. A hook **timeout is fail-open**: keep the
+  daemon on (`hook_daemon: auto`, the default) so calls stay far below the 30 s default. The
+  cloud agent treats `ask` as `deny` and honours only the `bash` command.
+- **One install is enough.** Copilot CLI also reads a repository's `.claude/settings.json`, so
+  if you ran `install-hook` for Claude Code the Copilot CLI already runs the same hook there.
+  Don't add the Copilot file as well: every call would be scanned twice.
+
+> The Claude Code side is tested end to end. The Copilot side follows GitHub's and VS Code's
+> published hook specs but has not been run against a live Copilot session. If a tool call
+> slips through, open an issue with the hook payload.
 
 ## Adding a provider
 
