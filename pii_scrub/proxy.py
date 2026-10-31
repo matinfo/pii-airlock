@@ -110,6 +110,7 @@ def build_app(
     mapping_store = mapping_store if mapping_store is not None else build_mapping_store(
         config.mapping_backend,
         root=Path(config.mapping_dir) if config.mapping_dir else None,
+        encrypt=config.mapping_encryption,
     )
 
     async def handle(request: Request) -> Response:
