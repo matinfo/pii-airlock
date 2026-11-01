@@ -55,12 +55,15 @@ pii-airlock = "pii_scrub.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/matinfo/pii-airlock"
-Documentation = "https://github.com/matinfo/pii-airlock#readme"
+Documentation = "https://matinfo.github.io/pii-airlock/"
 Issues = "https://github.com/matinfo/pii-airlock/issues"
 Changelog = "https://github.com/matinfo/pii-airlock/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pii_scrub"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/docs"]
 
 [tool.ruff]
 line-length = 100

@@ -9,7 +9,7 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-**[2-min quickstart](#2-minute-quickstart) · [Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [doctor](#doctor-health-checks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md)**
+**[📖 User guide](https://matinfo.github.io/pii-airlock/) · [2-min quickstart](#2-minute-quickstart) · [Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [doctor](#doctor-health-checks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md)**
 
 `pii-airlock` is a local privacy layer for AI tools. It replaces personal data with placeholders before requests leave your machine, then restores originals in responses.
 
@@ -72,13 +72,29 @@ pipx install "pii-airlock[proxy]"   # recommended (gateway included)
 pii-airlock init                    # guided setup (models + env hints)
 ```
 
-On macOS or Linux with [Homebrew](https://brew.sh/) (installs the CLI, hooks and gateway
-in their own virtualenv; the optional `gliner`, `docx` and `pdf` extras need pipx):
+**Alternative: Homebrew** (macOS or Linux, instead of pipx). One command installs the
+`pii-airlock` CLI, the Claude Code hooks and the gateway proxy:
 
 ```bash
 brew install matinfo/tap/pii-airlock
 pii-airlock download-models         # spaCy models, downloaded once
 ```
+
+Homebrew puts everything in a private Python virtualenv (an isolated folder of packages),
+so it cannot clash with your own Python. You never activate it: `pii-airlock` on your
+`PATH` already points into it. Things to know:
+
+- **Location:** `$(brew --prefix pii-airlock)/libexec` (find it with `brew --prefix pii-airlock`).
+- **Extras:** `brew` has no flag for the optional `docx`, `pdf` and `gliner` extras. Install
+  them into that venv with its own `pip` (`gliner` pulls PyTorch, a large download):
+
+  ```bash
+  "$(brew --prefix pii-airlock)/libexec/bin/python" -m pip install 'pii-airlock[docx]'
+  ```
+
+- **Upgrades reset it:** `brew upgrade` or `brew reinstall` rebuilds the venv, so re-run the
+  extras and `pii-airlock download-models` afterwards. If that is a nuisance, use pipx, whose
+  `pipx inject` additions survive upgrades.
 
 Latest from source (before a release lands on PyPI):
 
@@ -316,8 +332,7 @@ pii-airlock daemon stop
 While no daemon answers, hooks analyze in-process (`hook_fallback: inprocess`). With
 `hook_fallback: regex` they use patterns only, in milliseconds: emails, phones, IBANs,
 cards, IPs, FR/CH IDs, secrets and your `deny_list` — **names and places are not
-detected** in that mode. `hook_daemon: off` disables the daemon. Windows: no daemon
-(hooks analyze in-process).
+detected** in that mode. `hook_daemon: off` disables the daemon.
 
 **Not covered by hooks:** the *output* of a command or tool (e.g. `cat` in Bash, Grep
 matches, a fetched web page) reaches the model unchecked, as do binary files (images,
