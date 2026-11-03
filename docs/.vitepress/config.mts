@@ -18,6 +18,7 @@ export default defineConfig({
       { text: 'Use it with…', link: '/use/pick-your-setup' },
       { text: 'Help', link: '/guide/troubleshooting' },
       { text: 'Reference', link: '/reference/commands' },
+      { text: 'Changelog', link: '/reference/changelog' },
     ],
     sidebar: [
       {
@@ -62,6 +63,7 @@ export default defineConfig({
           { text: 'Commands', link: '/reference/commands' },
           { text: 'Settings', link: '/reference/settings' },
           { text: 'What it detects', link: '/reference/detected-types' },
+          { text: 'Changelog', link: '/reference/changelog' },
         ],
       },
     ],
