@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/matinfo/pii-airlock'
+const site = 'https://matinfo.github.io/pii-airlock'
 
 export default defineConfig({
   title: 'pii-airlock',
@@ -9,7 +10,30 @@ export default defineConfig({
   base: '/pii-airlock/',
   cleanUrls: true,
   lastUpdated: true,
-  head: [['link', { rel: 'icon', href: '/pii-airlock/logo.svg' }]],
+  head: [
+    ['link', { rel: 'icon', href: '/pii-airlock/logo.svg' }],
+    ['meta', { name: 'theme-color', content: '#3b82f6' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:site_name', content: 'pii-airlock' }],
+    ['meta', { property: 'og:image', content: `${site}/og.png` }],
+    ['meta', { property: 'og:image:width', content: '1280' }],
+    ['meta', { property: 'og:image:height', content: '640' }],
+    ['meta', { property: 'og:image:alt', content: 'pii-airlock: keep real personal data out of your AI prompts' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: `${site}/og.png` }],
+  ],
+  sitemap: { hostname: `${site}/` },
+  // Per-page og:title / og:description / og:url, so shared deep links read well.
+  transformHead({ pageData, siteData }) {
+    const path = pageData.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '')
+    const title = pageData.frontmatter.title ?? pageData.title
+    const description = pageData.frontmatter.description || pageData.description || siteData.description
+    return [
+      ['meta', { property: 'og:title', content: title ? `${title} | pii-airlock` : 'pii-airlock' }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: `${site}/${path}` }],
+    ]
+  },
 
   themeConfig: {
     logo: '/logo.svg',
