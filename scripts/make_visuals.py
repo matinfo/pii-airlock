@@ -2,7 +2,8 @@
 """Render the README demo GIF and the social/og image.
 
 Needs ``rsvg-convert`` (librsvg) and ``magick`` (ImageMagick) on PATH; nothing from PyPI.
-The terminal text below is real ``pii-airlock`` output (v0.7.0), pasted in, not invented.
+The terminal text below is real ``pii-airlock`` 0.7.0 output, pasted in, not invented.
+Run the CLI from this repo (an older pipx install prints ``<PERSON_1>``-style tokens).
 
     python3 scripts/make_visuals.py            # writes docs/public/demo.gif and og.png
 """
@@ -50,8 +51,8 @@ SCRIPT: list[tuple[Line, bool, int]] = [  # (line, typed, pause_ms_after)
     ([("Wrote safe.txt", DIM)], False, 0),
     ([("Mapping (2 entries) saved to prompt.pii-map.json", DIM)], False, 500),
     (prompt("cat safe.txt"), True, 250),
-    ([("Draft a reply to ", FG), ("<PERSON_1>", BLUE), (" (", FG),
-      ("<EMAIL_ADDRESS_1>", BLUE), (") about invoice 4471.", FG)], False, 1500),
+    ([("Draft a reply to ", FG), ("<PERSON_311093>", BLUE), (" (", FG),
+      ("<EMAIL_ADDRESS_706274>", BLUE), (") about invoice 4471.", FG)], False, 1500),
     ([], False, 0),
     ([("# 3. the answer comes back with tokens; restore the originals", DIM)], False, 500),
     (prompt("pii-airlock restore reply.txt --map prompt.pii-map.json"), True, 350),
@@ -155,7 +156,7 @@ def og_svg() -> str:
 <text x="96" y="388" font-family="{SANS}" font-size="38" fill="#cbd5e1">Keep real personal data out of your AI prompts.</text>
 <text x="96" y="436" font-family="{SANS}" font-size="30" fill="#93c5fd">Local. Reversible. No cloud.</text>
 <rect x="96" y="484" width="1088" height="84" rx="14" fill="#0f172a" opacity="0.85"/>
-<text x="124" y="535" font-family="{MONO}" font-size="25" xml:space="preserve"><tspan fill="#f472b6">Sarah Miller</tspan><tspan fill="#94a3b8"> (</tspan><tspan fill="#f472b6">sarah@acme.com</tspan><tspan fill="#94a3b8">)  &#8594;  </tspan><tspan fill="#60a5fa">&lt;PERSON_1&gt;</tspan><tspan fill="#94a3b8"> (</tspan><tspan fill="#60a5fa">&lt;EMAIL_ADDRESS_1&gt;</tspan><tspan fill="#94a3b8">)</tspan></text>
+<text x="124" y="535" font-family="{MONO}" font-size="22" xml:space="preserve"><tspan fill="#f472b6">Sarah Miller</tspan><tspan fill="#94a3b8"> (</tspan><tspan fill="#f472b6">sarah@acme.com</tspan><tspan fill="#94a3b8">)  &#8594;  </tspan><tspan fill="#60a5fa">&lt;PERSON_311093&gt;</tspan><tspan fill="#94a3b8"> (</tspan><tspan fill="#60a5fa">&lt;EMAIL_ADDRESS_706274&gt;</tspan><tspan fill="#94a3b8">)</tspan></text>
 <text x="1184" y="112" text-anchor="end" font-family="{SANS}" font-size="26" fill="#93c5fd">Claude Code &#183; Codex &#183; Cursor &#183; Copilot</text>
 </svg>"""
 
