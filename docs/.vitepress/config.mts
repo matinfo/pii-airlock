@@ -1,7 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/matinfo/pii-airlock'
 const site = 'https://matinfo.github.io/pii-airlock'
+// Single source of truth for the version shown in the nav.
+const version =
+  readFileSync(new URL('../../pii_scrub/__init__.py', import.meta.url), 'utf-8').match(
+    /__version__\s*=\s*"([^"]+)"/,
+  )?.[1] ?? ''
 
 export default defineConfig({
   title: 'pii-airlock',
@@ -42,7 +48,14 @@ export default defineConfig({
       { text: 'Use it with…', link: '/use/pick-your-setup' },
       { text: 'Help', link: '/guide/troubleshooting' },
       { text: 'Reference', link: '/reference/commands' },
-      { text: 'Changelog', link: '/reference/changelog' },
+      {
+        text: `v${version}`,
+        items: [
+          { text: 'Changelog', link: `${repo}/blob/main/CHANGELOG.md` },
+          { text: 'Releases', link: `${repo}/releases` },
+          { text: 'Contributing', link: `${repo}/blob/main/CONTRIBUTING.md` },
+        ],
+      },
     ],
     sidebar: [
       {
@@ -87,7 +100,6 @@ export default defineConfig({
           { text: 'Commands', link: '/reference/commands' },
           { text: 'Settings', link: '/reference/settings' },
           { text: 'What it detects', link: '/reference/detected-types' },
-          { text: 'Changelog', link: '/reference/changelog' },
         ],
       },
     ],
