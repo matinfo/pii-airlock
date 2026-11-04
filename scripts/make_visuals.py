@@ -140,25 +140,42 @@ def make_gif(path: Path) -> None:
 # --------------------------------------------------------------------------- social image
 
 def og_svg() -> str:
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
-<defs>
-  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#1e3a8a"/>
-  </linearGradient>
-</defs>
-<rect width="1280" height="640" fill="url(#bg)"/>
-<g transform="translate(84 44) scale(2)">
-  <rect x="6" y="6" width="52" height="52" rx="14" fill="#3b82f6"/>
-  <path d="M32 14 16 21v10c0 10 7 16 16 19 9-3 16-9 16-19V21z" fill="#fff"/>
-  <path d="m25 32 5 5 10-11" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-</g>
-<text x="96" y="318" font-family="{SANS}" font-size="104" font-weight="700" fill="#fff">pii-airlock</text>
-<text x="96" y="388" font-family="{SANS}" font-size="38" fill="#cbd5e1">Keep real personal data out of your AI prompts.</text>
-<text x="96" y="436" font-family="{SANS}" font-size="30" fill="#93c5fd">Local. Reversible. No cloud.</text>
-<rect x="96" y="484" width="1088" height="84" rx="14" fill="#0f172a" opacity="0.85"/>
-<text x="124" y="535" font-family="{MONO}" font-size="22" xml:space="preserve"><tspan fill="#f472b6">Sarah Miller</tspan><tspan fill="#94a3b8"> (</tspan><tspan fill="#f472b6">sarah@acme.com</tspan><tspan fill="#94a3b8">)  &#8594;  </tspan><tspan fill="#60a5fa">&lt;PERSON_311093&gt;</tspan><tspan fill="#94a3b8"> (</tspan><tspan fill="#60a5fa">&lt;EMAIL_ADDRESS_706274&gt;</tspan><tspan fill="#94a3b8">)</tspan></text>
-<text x="1184" y="112" text-anchor="end" font-family="{SANS}" font-size="26" fill="#93c5fd">Claude Code &#183; Codex &#183; Cursor &#183; Copilot</text>
-</svg>"""
+    def text(x: int, y: int, size: int, fill: str, body: str, extra: str = "") -> str:
+        return (f'<text x="{x}" y="{y}" font-family="{SANS}" font-size="{size}" '
+                f'fill="{fill}"{extra}>{body}</text>')
+
+    def span(fill: str, body: str) -> str:
+        return f'<tspan fill="{fill}">{body}</tspan>'
+
+    mapping = "".join([
+        span("#f472b6", "Sarah Miller"), span("#94a3b8", " ("),
+        span("#f472b6", "sarah@acme.com"), span("#94a3b8", ")  &#8594;  "),
+        span("#60a5fa", "&lt;PERSON_311093&gt;"), span("#94a3b8", " ("),
+        span("#60a5fa", "&lt;EMAIL_ADDRESS_706274&gt;"), span("#94a3b8", ")"),
+    ])
+    return "\n".join([
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" '
+        'viewBox="0 0 1280 640">',
+        '<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">',
+        '<stop offset="0" stop-color="#0b1220"/><stop offset="1" stop-color="#1e3a8a"/>',
+        '</linearGradient></defs>',
+        '<rect width="1280" height="640" fill="url(#bg)"/>',
+        '<g transform="translate(84 44) scale(2)">',
+        '<rect x="6" y="6" width="52" height="52" rx="14" fill="#3b82f6"/>',
+        '<path d="M32 14 16 21v10c0 10 7 16 16 19 9-3 16-9 16-19V21z" fill="#fff"/>',
+        '<path d="m25 32 5 5 10-11" stroke="#3b82f6" stroke-width="4" stroke-linecap="round" '
+        'stroke-linejoin="round" fill="none"/>',
+        '</g>',
+        text(96, 318, 104, "#fff", "pii-airlock", ' font-weight="700"'),
+        text(96, 388, 38, "#cbd5e1", "Keep real personal data out of your AI prompts."),
+        text(96, 436, 30, "#93c5fd", "Local. Reversible. No cloud."),
+        '<rect x="96" y="484" width="1088" height="84" rx="14" fill="#0f172a" opacity="0.85"/>',
+        f'<text x="124" y="535" font-family="{MONO}" font-size="22" '
+        f'xml:space="preserve">{mapping}</text>',
+        text(1184, 112, 26, "#93c5fd", "Claude Code &#183; Codex &#183; Cursor &#183; Copilot",
+             ' text-anchor="end"'),
+        "</svg>",
+    ])
 
 
 def make_og(path: Path) -> None:
