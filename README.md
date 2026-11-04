@@ -21,6 +21,12 @@ John Smith (john@acme.com) → <PERSON_482913> (<EMAIL_ADDRESS_093117>)
 
 Runs on **macOS, Linux, Windows** (Python ≥ 3.10). Built on [Microsoft Presidio](https://microsoft.github.io/presidio/).
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/matinfo/pii-airlock/main/docs/public/demo.gif"
+       alt="Terminal demo: pii-airlock scrubs a name and an email from a prompt, then restores them in the reply"
+       width="760">
+</p>
+
 ---
 
 ## Why people use pii-airlock
