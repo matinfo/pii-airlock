@@ -26,12 +26,10 @@ def test_allow_and_deny_update_policy(project):
     assert "CODENAME: Project Phoenix" in shown
 
 
-def test_policy_commands_work_from_a_subdirectory(project):
+def test_policy_commands_work_from_a_subdirectory(project, monkeypatch):
     sub = project / "src" / "deep"
     sub.mkdir(parents=True)
-    import os
-
-    os.chdir(sub)
+    monkeypatch.chdir(sub)
     assert runner.invoke(app, ["allow", "Acme"]).exit_code == 0
     assert "Acme" in load_config(cwd=sub).allow_list
 

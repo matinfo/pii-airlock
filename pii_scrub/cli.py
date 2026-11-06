@@ -414,7 +414,8 @@ def init(
         typer.echo(f"  {line}", err=True)
 
     if not ok:
-        typer.echo("\nAlmost there: fix the [needs action] lines, then run `pii-airlock status`.", err=True)
+        typer.echo("\nAlmost there: fix the [needs action] lines, then run "
+                   "`pii-airlock status`.", err=True)
         raise typer.Exit(code=1)
     typer.echo("\nDone. `pii-airlock status` shows the setup; `pii-airlock off` pauses it here.",
                err=True)
