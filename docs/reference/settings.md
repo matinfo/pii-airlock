@@ -3,7 +3,7 @@
 Settings live in YAML files. See [Where settings live](/customize/allow-and-deny#where-settings-live) for the order.
 Most people only need the commands in [Tell it what is sensitive](/customize/allow-and-deny).
 
-Example `.pii-airlock.yaml`:
+Example `.pii-airlock/config.yaml`:
 
 ```yaml
 languages: [en, fr]

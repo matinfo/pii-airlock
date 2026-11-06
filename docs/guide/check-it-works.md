@@ -22,8 +22,7 @@ It prints one line per check. Every line should start with `[ok]`.
 Use obviously fake data.
 
 ```bash
-echo "Contact John Smith at john@example.com" \
-  | pii-airlock scrub --map /tmp/test.pii-map.json -o /tmp/scrubbed.txt
+echo "Contact John Smith at john@example.com" | pii-airlock scrub -o /tmp/scrubbed.txt
 cat /tmp/scrubbed.txt
 ```
 
@@ -36,7 +35,7 @@ Contact <PERSON_482913> at <EMAIL_ADDRESS_093117>
 Your numbers will differ. Now put the originals back:
 
 ```bash
-pii-airlock restore /tmp/scrubbed.txt --map /tmp/test.pii-map.json
+pii-airlock restore /tmp/scrubbed.txt
 ```
 
 ```text
@@ -44,7 +43,7 @@ Contact John Smith at john@example.com
 ```
 
 ::: tip Windows
-Use a folder you own instead of `/tmp`, for example `$env:TEMP\test.pii-map.json`.
+Use a folder you own instead of `/tmp`, for example `$env:TEMP\scrubbed.txt`.
 :::
 
 ## 3. Only look, change nothing
@@ -61,6 +60,8 @@ Start `pii-airlock proxy`, then point your AI client at it as described in
 [Other AI apps and SDKs](/use/gateway). Send a message that includes a fake name and email. Your client should
 still show them. Your provider's dashboard or logs should show placeholders such as `<EMAIL_ADDRESS_093117>`.
 
-::: warning Delete test mapping files
-The mapping file holds the **real** values. Remove it when you finish: `rm /tmp/test.pii-map.json`.
+::: tip Where the mapping went
+`scrub` keeps the mapping (the real values, encrypted) in your project's `.pii-airlock/maps/`, or
+outside a project in `~/.local/state/pii-airlock/maps/`. That is how `restore` found it. Delete it
+when you no longer need to restore.
 :::

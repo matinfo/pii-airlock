@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Project home `.pii-airlock/`**, created by `pii-airlock init`: `config.yaml` (the project
+  policy, committed), `.gitignore`, `maps/` (encrypted mappings, local) and `off` (paused).
+  Like `.codegraph/`, it is also the switch: the hooks only act at or below a project home.
+- `pii-airlock init` now does the whole setup in one step: project home, user-level hooks for
+  Claude Code and Copilot (skipped when the plugin is enabled), detection models. The gateway
+  is optional and only hinted at.
+- `pii-airlock on` / `off` pause a project on this machine (policy and maps are kept);
+  `pii-airlock status` shows state, hooks, daemon, policy and maps in one screen.
+- `SessionStart` hook: Claude is told the project's PII rules in guarded projects.
+- `scrub` keeps its mapping in `.pii-airlock/maps/` (outside a project:
+  `~/.local/state/pii-airlock/maps/`), encrypted; `restore` finds it without `--map`.
+
+### Changed
+- **Breaking:** hooks are silent outside guarded projects; set `activation: always` in
+  `~/.config/pii-airlock/config.yaml` for the old everywhere behaviour.
+- **Breaking:** the policy moved to `.pii-airlock/config.yaml`. `.pii-airlock.yaml` and the
+  `yaml pii-airlock` block in `.claude/skills/pii-airlock/SKILL.md` are no longer read; user
+  rules go in `~/.config/pii-airlock/config.yaml` (`--scope user`).
+- **Breaking:** `pii-airlock policy init` / `policy show` are gone: use `init` / `status`.
+- The plugin launcher only blocks for a missing CLI inside guarded projects.
+
 ## [0.7.0] - 2026-11-01
 
 ### Added

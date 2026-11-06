@@ -5,7 +5,7 @@ text and combines the results, so mixed text is handled.
 
 ## Add German as an example
 
-1. Create `.pii-airlock.yaml` in your project:
+1. In your project's `.pii-airlock/config.yaml`:
 
    ```yaml
    languages: [en, fr, de]

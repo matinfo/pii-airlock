@@ -1,17 +1,30 @@
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/matinfo/pii-airlock/main/docs/public/logo.svg" alt="pii-airlock logo" width="96" height="96">
+
 # pii-airlock
 
-> **Keep real personal data out of AI prompts in minutes — local, reversible, and provider-agnostic.**
+**Your prompts get the placeholders. You keep the secrets.**
+
+A local privacy layer for AI tools: swaps personal data for placeholders before requests leave your machine, then restores the originals in the reply.
 
 [![CI](https://github.com/matinfo/pii-airlock/actions/workflows/ci.yml/badge.svg)](https://github.com/matinfo/pii-airlock/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/pii-airlock.svg)](https://pypi.org/project/pii-airlock/)
 ![Python](https://img.shields.io/badge/python-3.10%E2%80%933.14-blue.svg)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
+![Local only](https://img.shields.io/badge/privacy-100%25%20on--device-brightgreen)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
-**[📖 User guide](https://matinfo.github.io/pii-airlock/) · [2-min quickstart](#2-minute-quickstart) · [Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [doctor](#doctor-health-checks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md)**
+Works with **Claude Code · GitHub Copilot · Codex · Cursor · Aider · Gemini · any OpenAI-compatible client**
 
-`pii-airlock` is a local privacy layer for AI tools. It replaces personal data with placeholders before requests leave your machine, then restores originals in responses.
+**[📖 User guide](https://matinfo.github.io/pii-airlock/) · [Quickstart](#2-minute-quickstart) · [Install](#install) · [Gateway](#universal-gateway-any-provider) · [CLI](#cli-usage) · [Copilot](#github-copilot) · [doctor](#doctor-health-checks) · [Troubleshooting](#troubleshooting) · [All agents →](AGENTS.md)**
+
+</div>
+
+## Why
+
+Everything you paste into an AI tool is sent to a third party. `pii-airlock` sits between you and the provider: it spots names, emails, phones, cards, IBANs and secrets, and sends placeholders instead. Answers come back with your real values restored.
 
 Example:
 
@@ -29,13 +42,13 @@ Runs on **macOS, Linux, Windows** (Python ≥ 3.10). Built on [Microsoft Presidi
 
 ---
 
-## Why people use pii-airlock
+## What you get
 
 | Problem | What pii-airlock gives you |
 |---|---|
 | You use multiple AI clients/providers | One local gateway URL for all of them |
 | You need reversible anonymization | Stable placeholders + local mapping file |
-| You use Claude Code tools/files | Native hooks for prompt + tool-data checks |
+| You use Claude Code tools/files | Native hooks for prompt + tool-data checks (Claude Code, Copilot) |
 | You want to avoid vendor lock-in | Provider adapters: OpenAI-style, Anthropic, Gemini |
 
 Detection happens locally. Gateway traffic is forwarded only after PII is replaced.
@@ -44,27 +57,52 @@ Detection happens locally. Gateway traffic is forwarded only after PII is replac
 
 ## 2-minute quickstart
 
-If you just want the safest default for most users:
+```bash
+pipx install pii-airlock        # or: brew install matinfo/tap/pii-airlock
+cd my-project
+pii-airlock init                # guard this project
+```
+
+That's it. `init` creates `.pii-airlock/` in the project, installs the hooks for
+Claude Code and GitHub Copilot (once, for your user), and downloads the detection
+models. From now on, in this project only, prompts and tool calls that contain
+personal data are stopped before they leave your machine.
 
 ```bash
-pipx install "pii-airlock[proxy]"
-pii-airlock init
-pii-airlock proxy
+pii-airlock status              # what is guarded, by which hooks, with which policy
+pii-airlock allow "Acme SA"     # never PII here (your company, products)
+pii-airlock deny "Project X"    # always sensitive here (client, code name)
+pii-airlock off                 # pause here (`pii-airlock on` resumes)
 ```
 
-Then set your client base URL:
+Using a chat client instead of an agent (Cursor, Codex, an SDK)? Add the
+[gateway](#universal-gateway-any-provider): `pii-airlock proxy`, then point the
+client's base URL at `http://127.0.0.1:8745/openai`.
 
-```bash
-export OPENAI_BASE_URL=http://127.0.0.1:8745/openai
+---
+
+## The project home: `.pii-airlock/`
+
+Like `.git/` or `.codegraph/`, one folder holds everything pii-airlock knows about a project,
+and its presence is the on switch:
+
+```
+my-project/.pii-airlock/
+  config.yaml   policy: allow/deny lists, actions, patterns    committed, shared with the team
+  .gitignore    ignores everything else                        committed
+  maps/         mappings from `scrub` (real values, encrypted)  local only
+  off           present while paused (`pii-airlock off`)        local only
 ```
 
-PowerShell:
-
-```powershell
-$env:OPENAI_BASE_URL = "http://127.0.0.1:8745/openai"
-```
-
-Now prompts are scrubbed before provider calls, and responses are restored automatically.
+- Hooks are installed once for your user and **do nothing outside a project home**, so
+  unrelated repos are untouched. It is found from any subdirectory.
+- A teammate who clones the repo runs `pii-airlock init` too. The shared `config.yaml` then
+  applies, but only the settings that tighten protection, until they review it and run
+  `pii-airlock trust` (see [Trust](#per-project-policy)).
+- The token key and trust decisions stay in `~/.local/state/pii-airlock/`, never in the
+  project: encrypted maps next to their key would protect nothing.
+- To guard every directory instead, set `activation: always` in `~/.config/pii-airlock/config.yaml`.
+- The gateway has no notion of project: it scrubs whatever is sent to it.
 
 ---
 
@@ -137,10 +175,9 @@ This checks proxy dependencies, model installation, and mapping roundtrip in one
 ### Quick verification
 
 ```bash
-echo "Contact John Smith at john@example.com" \
-  | pii-airlock scrub --map /tmp/test.pii-map.json -o /tmp/scrubbed.txt
+echo "Contact John Smith at john@example.com" | pii-airlock scrub -o /tmp/scrubbed.txt
 cat /tmp/scrubbed.txt   # Contact <PERSON_482913> at <EMAIL_ADDRESS_093117>
-pii-airlock restore /tmp/scrubbed.txt --map /tmp/test.pii-map.json
+pii-airlock restore /tmp/scrubbed.txt
 ```
 
 ---
@@ -211,16 +248,14 @@ Need setup for a specific client? Use **[AGENTS.md](AGENTS.md)** (Claude Code, C
 ### Reversible scrub → restore pipe
 
 ```bash
-# 1. Scrub — replaces PII with tokens, saves a mapping file
-echo "Contacte Jean Dupont à jean@acme.fr" \
-  | pii-airlock scrub --map /tmp/m.pii-map.json
+# 1. Scrub — replaces PII with tokens, keeps the mapping (encrypted) in .pii-airlock/maps/
+echo "Contacte Jean Dupont à jean@acme.fr" | pii-airlock scrub
 # → Contacte <PERSON_558644> à <EMAIL_ADDRESS_094087>
 
 # 2. Send the scrubbed text to your LLM …
 
 # 3. Restore — swap tokens back in the model's response (use your own tokens)
-echo "J'ai répondu à <PERSON_558644> via <EMAIL_ADDRESS_094087>." \
-  | pii-airlock restore --map /tmp/m.pii-map.json
+echo "J'ai répondu à <PERSON_558644> via <EMAIL_ADDRESS_094087>." | pii-airlock restore
 # → J'ai répondu à Jean Dupont via jean@acme.fr.
 ```
 
@@ -271,39 +306,30 @@ pii-airlock scrub scan.pdf                                   # requires [pdf] �
 pii-airlock scrub prompt.txt --no-map          # irreversible one-way scrub
 pii-airlock scrub --lang fr,en                 # explicit language list
 pii-airlock scrub --threshold 0.7              # raise confidence cutoff
-pii-airlock scrub input.txt -o out.txt --map secrets.pii-map.json
+pii-airlock scrub input.txt -o out.txt --map m.json   # mapping elsewhere (plain JSON)
+pii-airlock restore out.txt --map m.json
 ```
+
+Mappings go to the project's `.pii-airlock/maps/` (outside a project:
+`~/.local/state/pii-airlock/maps/`), encrypted, never next to your file. `restore` tries them
+all, so no `--map` is needed.
 
 ---
 
 ## Claude Code hooks
 
-### As a plugin (one step)
+`pii-airlock init` installs them in `~/.claude/settings.json`. Or use the plugin instead:
 
 ```
 /plugin marketplace add matinfo/pii-airlock
 /plugin install pii-airlock@pii-airlock
 ```
 
-Installs the same hooks (`PreToolUse`, `UserPromptSubmit`) plus a `/pii-airlock:setup`
-skill that walks Claude through checking the install, downloading models and setting a
-policy. The plugin cannot install the Python CLI, so install that first
-(`brew install matinfo/tap/pii-airlock` or `pipx install "pii-airlock[proxy]"`).
-**Fails closed:** while the CLI is missing, every prompt and tool call is blocked (a
-`SessionStart` message says why); `PII_AIRLOCK_PLUGIN_FAIL_OPEN=1` lets them through. Use
-the plugin *or* `install-hook`, not both, or each call is scanned twice. The launcher is a
-POSIX shell script: on Windows use `install-hook`.
-
-### With `install-hook`
-
-Register guardrails that intercept PII before it reaches the model:
-
-```bash
-pii-airlock install-hook                  # both events, project .claude/settings.json
-pii-airlock install-hook --scope user     # ~/.claude/settings.json (all projects)
-pii-airlock install-hook --event tool     # PreToolUse only
-pii-airlock install-hook --event prompt   # UserPromptSubmit only
-```
+The plugin adds a `/pii-airlock:setup` skill; `init` sees it and skips its own hooks, so
+nothing is scanned twice. The plugin cannot install the Python CLI: install it first. While
+the CLI is missing, prompts and tool calls in a guarded project are blocked
+(`PII_AIRLOCK_PLUGIN_FAIL_OPEN=1` lets them through). The launcher is a POSIX shell script: on
+Windows use `init`.
 
 | Leak vector | Covered by | Default action |
 |---|---|---|
@@ -311,6 +337,7 @@ pii-airlock install-hook --event prompt   # UserPromptSubmit only
 | PII in a text file Claude reads (the hook scans the file content) | `PreToolUse` (`Read`) | ask |
 | PII in a shell command, file write/edit, search pattern, URL or web query | `PreToolUse` | ask |
 | PII in MCP tool arguments | `PreToolUse` (`mcp__*`) | ask |
+| Claude knowing the rules (placeholders, never work around a block) | `SessionStart` | rules added to the session |
 
 The hooks **detect and block/ask** — they don't silently rewrite payloads (the hook API doesn't support in-place rewriting). For a silent, reversible rewrite, use the CLI pipe above.
 
@@ -319,6 +346,8 @@ The hooks **detect and block/ask** — they don't silently rewrite payloads (the
   (Claude Code has no "ask" for prompts: it's block or send).
 - If detection can't run (e.g. missing spaCy model), the hooks **fail closed**: the
   input is treated as containing PII. Set `hook_on_error: open` to skip checks instead.
+- `pii-airlock install-hook` registers them by hand: `--scope project` writes the repo's
+  `.claude/settings.json` (every teammate then needs the CLI), `--event tool|prompt` picks one.
 
 **Speed: the hook daemon.** Claude Code starts a new process for every hook call, and
 loading the spaCy models costs 0.5–3 s each time. With the default `hook_daemon: auto`,
@@ -330,7 +359,7 @@ project policy on every call, and exits after `hook_daemon_idle_minutes` (30) id
 your machine.
 
 ```bash
-pii-airlock daemon status     # also shown by `pii-airlock doctor`
+pii-airlock daemon status     # also shown by `pii-airlock status`
 pii-airlock daemon start      # warm it up now (e.g. from your shell profile)
 pii-airlock daemon stop
 ```
@@ -348,17 +377,12 @@ PDFs). For full coverage, route the traffic through the gateway.
 
 ## GitHub Copilot
 
-```bash
-pii-airlock install-hook --target copilot    # writes .github/hooks/pii-airlock.json
-pii-airlock install-hook --target copilot --scope user   # ~/.copilot/hooks/ (all repos)
-```
+`pii-airlock init` installs the hook in `~/.copilot/hooks/` when it finds Copilot. It guards
+Copilot's **tool calls** (`preToolUse`: shell commands, edits, file reads, web fetches, MCP
+calls) in the Copilot CLI, the cloud agent and VS Code agent mode, in guarded projects only.
 
-Guards Copilot's **tool calls** (`preToolUse`: shell commands, edits, file reads, web fetches, MCP
-calls) in the Copilot CLI, the cloud agent and VS Code agent mode.
-
-- **Already ran `pii-airlock install-hook` (project scope) for Claude Code?** Skip this: Copilot
-  CLI also reads the repo's `.claude/settings.json`, and both would scan each call twice. The
-  Claude Code *plugin* and `--scope user` do not write that file, so they do not reach Copilot.
+- **Cloud agent:** it runs on GitHub's machines, so it needs the repo-level hook:
+  `pii-airlock install-hook --target copilot` writes `.github/hooks/pii-airlock.json`.
 - **Chat in VS Code:** a hook cannot block prompts, so add your own model as a *Custom Endpoint*
   that points at the gateway (config in [AGENTS.md](AGENTS.md#github-copilot)).
 - **Not covered:** Copilot's default models and inline suggestions.
@@ -372,8 +396,8 @@ Written from GitHub's hook specs; not yet run against a live Copilot session.
 Override chain (lowest → highest priority):
 
 ```
-bundled defaults → ~/.config/pii-airlock/config.yaml → ~/.claude/skills/pii-airlock/SKILL.md
-  → ./.pii-airlock.yaml → ./.claude/skills/pii-airlock/SKILL.md → CLI flags
+bundled defaults → ~/.config/pii-airlock/config.yaml (you, every project)
+  → <project>/.pii-airlock/config.yaml (this project) → CLI flags
 ```
 
 `allow_list`, `deny_list` and `custom_patterns` accumulate across layers (your
@@ -394,6 +418,7 @@ exclude_entities: [DATE_TIME, URL, NRP, US_DRIVER_LICENSE, US_BANK_NUMBER,
 score_thresholds: {}  # per-entity minimum, e.g. {PERSON: 0.7}
 builtin_recognizers: true  # FR/CH IDs, FR/CH phone formats, secrets (see below)
 analysis_cache_size: 2048  # texts remembered per language (digest + offsets, never the text); 0 = off
+activation: project        # hooks run in projects with .pii-airlock/ (always: everywhere)
 hook_daemon: auto          # keep models loaded between hook calls (off: never)
 hook_fallback: inprocess   # no daemon answer: load models (inprocess) or patterns only (regex)
 hook_decision: ask    # tool calls: ask (surface + confirm) | deny (block)
@@ -417,7 +442,8 @@ backed-up `maps/` directory is then useless without that key: keep `token.key` o
 backups, and note that losing it makes pending mappings unreadable (they only live for
 one request). Plain files from older versions still load. Set `mapping_encryption: false`
 to write readable JSON for debugging; this is ignored in an untrusted project's config.
-Files from `pii-airlock scrub --map` stay plain JSON, as you restore them by hand.
+`pii-airlock scrub` encrypts its mappings the same way, unless you pass `--map` (plain JSON
+where you said).
 
 ### Built-in recognizers
 
@@ -437,21 +463,19 @@ every language and need no model:
 
 Exclude any of them with `exclude_entities`, or all with `builtin_recognizers: false`.
 
-### Per-project policy (Claude Code skill)
+### Per-project policy
 
-The project policy lives in `.claude/skills/pii-airlock/SKILL.md`. Claude Code loads
-it as a skill (rules for handling personal data, what to do when a hook blocks), and
-pii-airlock reads its fenced `yaml pii-airlock` block as config.
+The project policy is `.pii-airlock/config.yaml`, a plain YAML file that takes any setting
+above. Edit it by hand or from the CLI:
 
 ```bash
-pii-airlock policy init                  # create the skill for this project
-pii-airlock allow "Acme SA"              # never PII here (your company, products)
+pii-airlock allow "Acme SA"                        # never PII here (your company, products)
 pii-airlock deny "Project Phoenix" --as CODENAME   # always sensitive here
 pii-airlock allow "Jane Roe" --scope user          # personal, all projects
-pii-airlock policy show                  # effective policy and where it comes from
+pii-airlock status                                 # effective policy
 ```
 
-```yaml pii-airlock
+```yaml
 allow_list: [Acme SA]
 deny_list:
   CODENAME: [Project Phoenix]
@@ -462,13 +486,13 @@ custom_patterns:
 Hooks apply the policy of the project Claude Code is working in. Every detection
 message shows the one-command fix for a false positive.
 
-**Trust.** A project's policy comes with the repo, and a policy can loosen protection
+**Trust.** The policy comes with the repo, and a policy can loosen protection
 (`allow_list`, `hook_on_error: open`, `entity_actions: {PERSON: allow}`...). So for a
 project you have not trusted, only settings that **tighten** apply (deny-list terms,
-custom patterns, `block` / `redact`, `deny` / `block` / `closed` decisions). Your own
-`allow`, `deny`, `action` and `policy init` edits keep a trusted project trusted; after
-a `git pull` that changes the policy, review it and run `pii-airlock trust`.
-`pii-airlock policy show` says what is being ignored. User-level config is always trusted.
+custom patterns, `block` / `redact`, `deny` / `block` / `closed` decisions). A policy
+`init` creates, and your own `allow`, `deny` and `action` edits, are trusted; after a
+`git pull` that changes it, review it and run `pii-airlock trust`. `pii-airlock status`
+says what is being ignored. User-level config is always trusted.
 
 #### What happens to each entity type
 
@@ -486,14 +510,14 @@ pii-airlock action IBAN_CODE redact          # this project
 pii-airlock action CREDIT_CARD block --scope user
 ```
 
-```yaml pii-airlock
+```yaml
 entity_actions:
   IBAN_CODE: redact
   SECRET: block        # API keys and passwords never leave the machine
   LOCATION: allow
 ```
 
-Layers accumulate (user policy + project policy); an explicit action beats
+Layers accumulate (user config + project policy); an explicit action beats
 `exclude_entities`. Names found elsewhere in the text keep following their person:
 with `EMAIL_ADDRESS: allow`, `marie@acme.fr` stays but a bare `marie` that
 matches a detected "Marie Dubois" is still tokenized.
@@ -505,7 +529,7 @@ python -m spacy download de_core_news_lg
 ```
 
 ```yaml
-# .pii-airlock.yaml
+# .pii-airlock/config.yaml (or ~/.config/pii-airlock/config.yaml)
 languages: [en, fr, de]
 models:
   de: de_core_news_lg
@@ -639,19 +663,18 @@ runs (the command prints the exact wheel URL in this case).
 
 ---
 
-## ⚠ Security: the mapping file holds real PII
+## ⚠ Security: mapping files hold real PII
 
-`*.pii-map.json` contains the **original personal data** in plain text.
+A mapping file pairs every token with the **original personal data**.
 
-- Created owner-only (`0600` on POSIX; default user ACLs on Windows — see above).
-- The bundled `.gitignore` excludes `*.pii-map.json` and `*.pii-map.*`.
-- **Never commit mapping files.**
-- Delete them when you no longer need to restore.
-- Use `--no-map` when reversibility isn't required.
-- `scrub --encrypt-map` writes the file encrypted (AES-256-GCM, key derived from
-  `token.key` in your state directory); `restore --map` opens it with the same key
-  automatically. Opt-in because such a file is only restorable on this machine, and
-  only while `token.key` exists: keep `token.key` out of backups, never in the repo.
+- `scrub` writes them to `.pii-airlock/maps/` (owner-only folder), **encrypted**
+  (AES-256-GCM, key derived from `token.key` in `~/.local/state/pii-airlock/`). A copied,
+  synced or backed-up project folder is useless without that key: keep `token.key` out of
+  backups and never in the repo. Losing it makes the maps unreadable.
+- `.pii-airlock/.gitignore` keeps `maps/` out of git; only `config.yaml` is committed.
+- `--map PATH` writes plain JSON where you say (add `--encrypt-map` to encrypt it): never
+  commit such files. The repo `.gitignore` here excludes `*.pii-map.json` and `*.pii-map.*`.
+- Delete maps you no longer need. Use `--no-map` when reversibility isn't required.
 - The gateway keeps its mapping in memory only and discards it after each response.
 
 ---
@@ -671,7 +694,7 @@ Unit tests stub out Presidio/spaCy and run entirely offline. Detection quality i
  For a live end-to-end check, run `pii-airlock download-models` first, then:
 
 ```bash
-echo "Call John Smith at john@example.com" | pii-airlock scrub --map /tmp/test.pii-map.json
+echo "Call John Smith at john@example.com" | pii-airlock scrub
 ```
 
 ---

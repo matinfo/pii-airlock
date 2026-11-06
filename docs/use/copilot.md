@@ -17,23 +17,20 @@ sit in front of that. Do not rely on it there.
 ## Protect tool calls (hook)
 
 ```bash
-pii-airlock install-hook --target copilot
+pii-airlock init
 ```
 
-This writes `.github/hooks/pii-airlock.json` in your repository. For every repository at once:
+Run in a project, `init` installs the Copilot hook for your user (in `~/.copilot/hooks/`) when it
+finds Copilot, and guards this project. The hook only acts in projects that have a `.pii-airlock/`
+folder. It checks shell commands, file reads and edits, web fetches and MCP calls, and asks you
+before anything containing personal data goes ahead.
+
+The cloud agent runs on GitHub's machines and does not see your user hooks. For it, write the hook
+into the repository:
 
 ```bash
-pii-airlock install-hook --target copilot --scope user
+pii-airlock install-hook --target copilot   # .github/hooks/pii-airlock.json
 ```
-
-The hook checks shell commands, file reads and edits, web fetches and MCP calls, and asks you before anything
-containing personal data goes ahead.
-
-::: tip Already ran `install-hook` for Claude Code in this project?
-Skip this step. Copilot CLI also reads the project's Claude Code settings, so it already runs the same hook.
-Installing both would check every call twice. The Claude Code plugin and `--scope user` do not write that file,
-so they do not reach Copilot.
-:::
 
 ## Chat in VS Code
 

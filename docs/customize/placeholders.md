@@ -54,5 +54,5 @@ Numbered in reading order, separately for each request or file. This was the def
 
 ## Where do I put these settings?
 
-In `~/.config/pii-airlock/config.yaml` for yourself, or `.pii-airlock.yaml` in a project. See
+In `~/.config/pii-airlock/config.yaml` for yourself, or `.pii-airlock/config.yaml` in a project. See
 [Settings](/reference/settings).

@@ -29,13 +29,13 @@ Specific gaps:
 
 ## The map file holds the real data
 
-When you clean a file with `scrub --map`, the map file stores the original values in plain text.
+When you clean a file with `scrub`, the mapping stores the original values.
 
-- Never commit it, email it or upload it.
-- Name it `*.pii-map.json`. The project's `.gitignore` already ignores that pattern.
-- Delete it when you are done.
-- Use `--no-map` if you will never need to restore.
-- Use `--encrypt-map` to protect it, with the trade-off that it only opens on this computer while `token.key` exists.
+- By default it goes to the project's `.pii-airlock/maps/`, **encrypted** with a key that stays in
+  `~/.local/state/pii-airlock/`, and the folder's own `.gitignore` keeps it out of Git.
+- `--map FILE` writes plain JSON where you say (add `--encrypt-map` to encrypt it). Never commit,
+  email or upload such a file.
+- Delete mappings when you are done. Use `--no-map` if you will never need to restore.
 
 The gateway keeps its mapping **in memory only** and forgets it after each response.
 
