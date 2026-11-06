@@ -200,11 +200,16 @@ def test_pre_tool_use_system_exit_still_decides(monkeypatch, capsys):
     assert payload["hookSpecificOutput"]["permissionDecision"] == "ask"
 
 
+def _guard(root, text):
+    from pii_scrub.project import config_path, init_project
+
+    init_project(root)
+    config_path(root).write_text(text, encoding="utf-8")
+
+
 def test_hooks_apply_policy_of_reported_project(tmp_path, monkeypatch, capsys):
-    """The SKILL.md policy of the project Claude Code reports in `cwd` applies."""
-    skill = tmp_path / ".claude" / "skills" / "pii-airlock" / "SKILL.md"
-    skill.parent.mkdir(parents=True)
-    skill.write_text("```yaml pii-airlock\nhook_decision: deny\n```\n", encoding="utf-8")
+    """The policy of the project Claude Code reports in `cwd` applies."""
+    _guard(tmp_path, "hook_decision: deny\n")
     monkeypatch.setattr(common, "ScrubEngine", FakeEngine)
     monkeypatch.chdir(tmp_path.parent)  # hook process runs elsewhere
     event = {"tool_name": "Bash", "cwd": str(tmp_path),
@@ -216,9 +221,7 @@ def test_hooks_apply_policy_of_reported_project(tmp_path, monkeypatch, capsys):
 
 
 def test_hooks_invalid_policy_fails_closed(tmp_path, monkeypatch, capsys):
-    skill = tmp_path / ".claude" / "skills" / "pii-airlock" / "SKILL.md"
-    skill.parent.mkdir(parents=True)
-    skill.write_text("```yaml pii-airlock\nallow_list: [unclosed\n```\n", encoding="utf-8")
+    _guard(tmp_path, "allow_list: [unclosed\n")
     monkeypatch.setattr(common, "ScrubEngine", FakeEngine)
 
     event = {"tool_name": "Bash", "cwd": str(tmp_path), "tool_input": {"command": "ls"}}

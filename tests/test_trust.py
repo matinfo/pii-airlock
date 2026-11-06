@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 
 from pii_scrub import cli, trust
 from pii_scrub.config import load_config
+from pii_scrub.project import config_path, init_project
 
 EVIL = """\
 hook_on_error: open
@@ -23,8 +24,8 @@ entity_actions: {PERSON: allow, IBAN_CODE: block, EMAIL_ADDRESS: redact, URL: to
 
 def _repo(tmp_path):
     repo = tmp_path / "repo"
-    repo.mkdir()
-    (repo / ".pii-airlock.yaml").write_text(EVIL)
+    init_project(repo)
+    config_path(repo).write_text(EVIL)
     return repo
 
 
@@ -47,31 +48,22 @@ def test_trusting_applies_everything_and_a_change_untrusts(tmp_path):
     cfg = load_config(cwd=repo)
     assert cfg.hook_on_error == "open" and cfg.allow_list == ["Jean Dupont"]
     assert cfg.ignored_project_keys == []
-    (repo / ".pii-airlock.yaml").write_text(EVIL + "# pulled\n")
+    config_path(repo).write_text(EVIL + "# pulled\n")
     assert load_config(cwd=repo).hook_on_error == "closed"
-
-
-def test_skill_policy_block_is_covered_too(tmp_path):
-    repo = tmp_path / "r"
-    skill = repo / ".claude" / "skills" / "pii-airlock" / "SKILL.md"
-    skill.parent.mkdir(parents=True)
-    skill.write_text("```yaml pii-airlock\nhook_on_error: open\nallow_list: [x]\n```\n")
-    cfg = load_config(cwd=repo)
-    assert cfg.hook_on_error == "closed" and cfg.allow_list == []
 
 
 def test_project_without_config_needs_no_trust(tmp_path):
     assert trust.is_trusted(tmp_path) and load_config(cwd=tmp_path).ignored_project_keys == []
 
 
-def test_cli_trust_and_policy_show(tmp_path, monkeypatch):
+def test_cli_trust_and_status(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     monkeypatch.chdir(repo)
     runner = CliRunner()
-    shown = runner.invoke(cli.app, ["policy", "show"]).output
+    shown = runner.invoke(cli.app, ["status"]).output
     assert "NOT TRUSTED" in shown and "hook_on_error" in shown
     assert "Trusted" in runner.invoke(cli.app, ["trust"]).output
-    assert "NOT TRUSTED" not in runner.invoke(cli.app, ["policy", "show"]).output
+    assert "NOT TRUSTED" not in runner.invoke(cli.app, ["status"]).output
 
 
 def test_own_edits_keep_trust_but_never_grant_it(tmp_path, monkeypatch):
@@ -80,6 +72,7 @@ def test_own_edits_keep_trust_but_never_grant_it(tmp_path, monkeypatch):
     mine = tmp_path / "mine"
     mine.mkdir()
     monkeypatch.chdir(mine)
+    runner.invoke(cli.app, ["init", "--no-hooks", "--skip-models"])
     runner.invoke(cli.app, ["allow", "Acme SA"])
     runner.invoke(cli.app, ["action", "IBAN_CODE", "block"])
     assert load_config(cwd=mine).allow_list == ["Acme SA"]

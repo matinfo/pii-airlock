@@ -1,34 +1,25 @@
-"""Project policy in SKILL.md: parsing, editing, config layering, engine rules."""
+"""Project policy (.pii-airlock/config.yaml): parsing, editing, config layering, engine rules."""
 
 import pytest
 
+from pii_scrub import config as config_mod
 from pii_scrub import policy, trust
 from pii_scrub.config import Config, load_config
 from pii_scrub.engine import Detection, ScrubEngine
 from pii_scrub.mapping import Mapping
+from pii_scrub.project import config_path, init_project
 
 
-def _isolate_user(monkeypatch, tmp_path):
-    monkeypatch.setattr(policy.Path, "home", lambda: tmp_path / "home")
-    import pii_scrub.config as config
-
-    monkeypatch.setattr(config, "_USER_FILE", tmp_path / "home" / "none.yaml")
-
-
-def test_init_writes_skill_with_frontmatter_and_empty_policy(tmp_path):
-    path = policy.skill_path("project", tmp_path)
-    assert policy.init_skill(path)
-    text = path.read_text()
-    assert text.startswith("---\nname: pii-airlock\n")
-    assert "```yaml pii-airlock" in text
+def test_template_is_commented_and_empty(tmp_path):
+    path = tmp_path / "config.yaml"
+    policy.write_template(path)
+    assert path.read_text().startswith("# pii-airlock policy")
     assert policy.read_policy(path) == {"allow_list": [], "deny_list": {}}
-    assert not policy.init_skill(path)  # never overwrites without force
 
 
-def test_allow_and_deny_edit_only_the_policy_block(tmp_path):
-    path = policy.skill_path("project", tmp_path)
-    policy.init_skill(path)
-    path.write_text(path.read_text() + "\nCustom note kept.\n")
+def test_edits_keep_the_header_comments(tmp_path):
+    path = tmp_path / "config.yaml"
+    policy.write_template(path)
     assert policy.add_allow(path, "Acme SA")
     assert not policy.add_allow(path, "acme sa")  # case-insensitive duplicate
     assert policy.add_deny(path, "Projet Phoenix")
@@ -36,29 +27,27 @@ def test_allow_and_deny_edit_only_the_policy_block(tmp_path):
     data = policy.read_policy(path)
     assert data["allow_list"] == ["Acme SA"]
     assert data["deny_list"] == {"CONFIDENTIAL": ["Projet Phoenix"], "CLIENT": ["Globex"]}
-    assert "Custom note kept." in path.read_text()
-    assert "## Rules for Claude" in path.read_text()
+    assert path.read_text().startswith("# pii-airlock policy")
 
 
-def test_invalid_policy_block_raises_clear_error(tmp_path):
-    path = tmp_path / "SKILL.md"
-    path.write_text("```yaml pii-airlock\n- just\n- a list\n```\n")
+def test_invalid_policy_raises_clear_error(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text("- just\n- a list\n")
     with pytest.raises(policy.PolicyError, match="must be a YAML mapping"):
         policy.read_policy(path)
 
 
-def test_load_config_layers_user_and_project_skills(tmp_path, monkeypatch):
-    _isolate_user(monkeypatch, tmp_path)
-    user = policy.skill_path("user")
-    policy.add_allow(user, "Mathieu Meylan")
+def test_load_config_layers_user_and_project(tmp_path):
+    policy.add_allow(config_mod.USER_FILE, "Mathieu Meylan")
     project = tmp_path / "proj"
-    p = policy.skill_path("project", project)
+    init_project(project)
+    p = config_path(project)
     policy.add_allow(p, "Acme SA")
     policy.add_deny(p, "Phoenix")
-    p.write_text(p.read_text().replace("deny_list:", "prompt_decision: warn\ndeny_list:"))
+    p.write_text(p.read_text() + "prompt_decision: warn\n")
     trust.trust(project)  # reviewed: loosening settings apply
 
-    cfg = load_config(cwd=project)
+    cfg = load_config(cwd=project / "sub")  # found from a subdirectory too
     assert cfg.allow_list == ["Mathieu Meylan", "Acme SA"]  # accumulated
     assert cfg.deny_list == {"CONFIDENTIAL": ["Phoenix"]}
     assert cfg.prompt_decision == "warn"

@@ -12,11 +12,11 @@ def _patch_paths(monkeypatch, tmp_path):
     return proj
 
 
-def test_install_both_creates_two_events(monkeypatch, tmp_path):
+def test_install_both_creates_all_events(monkeypatch, tmp_path):
     proj = _patch_paths(monkeypatch, tmp_path)
     path, added = hi.install("both", "project")
     assert path == proj
-    assert set(added) == {"PreToolUse", "UserPromptSubmit"}
+    assert set(added) == {"PreToolUse", "UserPromptSubmit", "SessionStart"}
 
     data = json.loads(proj.read_text())
     assert "PreToolUse" in data["hooks"]

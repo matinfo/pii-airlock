@@ -7,7 +7,19 @@
 # PII_AIRLOCK_PLUGIN_FAIL_OPEN=1 lets everything through while the CLI is missing.
 event="$1"
 
+# Outside a guarded project (no .pii-airlock/ here or above) there is nothing to do:
+# this keeps a missing CLI from blocking unrelated projects.
+guarded() {
+  dir="$PWD"
+  while :; do
+    [ -d "$dir/.pii-airlock" ] && return 0
+    [ "$dir" = "/" ] || [ -z "$dir" ] && return 1
+    dir=$(dirname "$dir")
+  done
+}
+
 if ! command -v pii-airlock >/dev/null 2>&1; then
+  guarded || exit 0
   msg='pii-airlock is not installed. Install it with `brew install matinfo/tap/pii-airlock` or `pipx install "pii-airlock[proxy]"`, then run `pii-airlock download-models`.'
   if [ "$event" = "session-start" ]; then
     echo "$msg PII protection is OFF until then: prompts and tool calls are blocked."
@@ -17,8 +29,5 @@ if ! command -v pii-airlock >/dev/null 2>&1; then
   echo "pii-airlock plugin: $msg Blocked because PII protection is not active (set PII_AIRLOCK_PLUGIN_FAIL_OPEN=1 to allow anyway)." >&2
   exit 2
 fi
-
-# Nothing to scan at session start: the check above is the whole job.
-[ "$event" = "session-start" ] && exit 0
 
 exec pii-airlock hook "$event"

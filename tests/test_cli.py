@@ -101,7 +101,8 @@ def test_download_models_with_pip_reports_failed_models(monkeypatch):
     assert expected in rendered
 
 
-def test_init_reports_ready(monkeypatch):
+def test_init_reports_ready(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
     out = _capture_echo(monkeypatch)
     monkeypatch.setattr(
         cli, "_build_config", lambda lang, threshold: _fake_config({"en": "en_model"})
@@ -112,10 +113,10 @@ def test_init_reports_ready(monkeypatch):
         cli, "_env_export_examples", lambda host, port: ["export OPENAI_BASE_URL=..."]
     )
 
-    cli.init(host="127.0.0.1", port=8745, skip_models=False)
+    cli.init(hooks=False, skip_models=False, host="127.0.0.1", port=8745)
 
     rendered = "\n".join(text for text, _ in out)
-    assert "Setup complete." in rendered
+    assert "Done." in rendered and "Guarding" in rendered
     assert "pii-airlock proxy" in rendered
 
 
@@ -137,6 +138,16 @@ def test_doctor_exits_nonzero_when_missing_requirements(monkeypatch):
     assert "[fail] installed models:" in rendered
 
 
+def _guard(root, text):
+    """Make `root` a guarded project with `text` as its (trusted) policy."""
+    from pii_scrub.project import config_path, init_project
+    from pii_scrub.trust import trust
+
+    init_project(root)
+    config_path(root).write_text(text)
+    trust(root)
+
+
 def test_scrub_refuses_a_file_with_a_blocked_entity(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
@@ -152,7 +163,7 @@ def test_scrub_refuses_a_file_with_a_blocked_entity(tmp_path, monkeypatch):
     # No spaCy model needed (nor the machine's own config): the analyzer is stubbed.
     monkeypatch.setattr(ScrubEngine, "_analyzer", SimpleNamespace(analyze=analyze))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    (tmp_path / ".pii-airlock.yaml").write_text("entity_actions: {EMAIL_ADDRESS: block}\n")
+    _guard(tmp_path, "entity_actions: {EMAIL_ADDRESS: block}\n")
     monkeypatch.chdir(tmp_path)
     src = tmp_path / "in.txt"
     src.write_text("mail jean@acme.fr please")
@@ -165,7 +176,7 @@ def test_scrub_refuses_a_file_with_a_blocked_entity(tmp_path, monkeypatch):
 def test_header_profiled_csv_columns_obey_entity_actions(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
-    (tmp_path / ".pii-airlock.yaml").write_text(
+    _guard(tmp_path, 
         "entity_actions: {EMAIL_ADDRESS: redact}\nlanguages: [en]\nmodels: {en: x}\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr("pii_scrub.engine.ScrubEngine._analyzer",
@@ -196,12 +207,14 @@ def _scrub_email(tmp_path, monkeypatch, *extra):
 
     monkeypatch.setattr(ScrubEngine, "_analyzer", SimpleNamespace(analyze=analyze))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
-    (tmp_path / ".pii-airlock.yaml").write_text("languages: [en]\nmodels: {en: x}\n")
+    _guard(tmp_path, "languages: [en]\nmodels: {en: x}\n")
     monkeypatch.chdir(tmp_path)
     src, out, mp = tmp_path / "in.txt", tmp_path / "out.txt", tmp_path / "m.pii-map.json"
     src.write_text("mail jean@acme.fr please")
-    result = CliRunner().invoke(cli.app, ["scrub", str(src), "--map", str(mp), "-o", str(out),
-                                         *extra])
+    args = ["--map", str(mp)]
+    if "--map-default" in extra:
+        args, extra = [], tuple(e for e in extra if e != "--map-default")
+    result = CliRunner().invoke(cli.app, ["scrub", str(src), *args, "-o", str(out), *extra])
     assert result.exit_code == 0, result.output
     return out, mp
 
@@ -231,3 +244,15 @@ def test_restore_reports_a_map_encrypted_with_another_key(tmp_path, monkeypatch)
     token_key._master_key.cache_clear()
     result = CliRunner().invoke(cli.app, ["restore", str(out), "--map", str(mp)])
     assert result.exit_code == 1 and "cannot decrypt" in result.output
+
+
+def test_scrub_keeps_the_map_in_the_project_encrypted_and_restore_finds_it(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    out, _ = _scrub_email(tmp_path, monkeypatch, "--map-default")
+    maps = list((tmp_path / ".pii-airlock" / "maps").glob("*.pii-map.json"))
+    assert [m.name for m in maps] == ["in.txt.pii-map.json"]
+    assert b"jean@acme.fr" not in maps[0].read_bytes()
+    restored = CliRunner().invoke(cli.app, ["restore", str(out)])
+    assert restored.exit_code == 0, restored.output
+    assert "jean@acme.fr" in restored.output

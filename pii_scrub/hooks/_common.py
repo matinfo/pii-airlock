@@ -23,6 +23,7 @@ from pii_scrub import daemon
 from pii_scrub.config import Config, load_config
 from pii_scrub.engine import Detection, ScrubEngine, apply_detections
 from pii_scrub.mapping import Mapping
+from pii_scrub.project import find_project, is_active
 from pii_scrub.token_key import token_key
 
 # Tool-input fields worth scanning, per tool name. `Read` is special-cased: the
@@ -241,6 +242,8 @@ def _tool_texts(tool: str, tool_input: dict, event: dict, config: Config) -> lis
 def run_pre_tool_use() -> None:
     event = _read_event()
     config, config_error = _load_config(event)
+    if not is_active(event.get("cwd"), config.activation):
+        return  # project has not opted in (`pii-airlock init`)
     tool = event.get("tool_name", "") or ""
     tool_input = event.get("tool_input", {}) or {}
     decision = "deny" if config.hook_decision == "deny" else "ask"
@@ -287,6 +290,8 @@ def run_pre_tool_use() -> None:
 def run_user_prompt_submit() -> None:
     event = _read_event()
     config, config_error = _load_config(event)
+    if not is_active(event.get("cwd"), config.activation):
+        return  # project has not opted in (`pii-airlock init`)
     prompt = event.get("prompt", "") or ""
     block = config.prompt_decision != "warn" or config.hook_decision == "deny"
 
@@ -341,3 +346,28 @@ def run_user_prompt_submit() -> None:
             },
         }
     )
+
+
+# Context Claude gets at session start in a guarded project (replaces a policy skill).
+_SESSION_RULES = """\
+This project is guarded by pii-airlock: prompts and tool calls are checked for personal \
+data (names, emails, phones, IBANs, client names...) before they leave the machine.
+- Do not copy personal data into commands, code, tests, docs or commit messages; use \
+obvious placeholders (Jane Doe, jane@example.com).
+- When a pii-airlock hook asks or blocks, do not work around it (no re-encoding, splitting \
+or paraphrasing the value): tell the user what was flagged and let them decide.
+- To work on a file with personal data, suggest `pii-airlock scrub FILE -o FILE.scrubbed`, \
+work on the copy, then `pii-airlock restore`.
+- Never read or print anything under .pii-airlock/maps/ (real values).
+- Do not edit .pii-airlock/config.yaml or run `pii-airlock allow|deny|action|trust|off` \
+unless the user asks."""
+
+
+def run_session_start() -> None:
+    event = _read_event()
+    config, _ = _load_config(event)
+    if not is_active(event.get("cwd"), config.activation):
+        return
+    root = find_project(event.get("cwd"))
+    where = f" (policy: {root}/.pii-airlock/config.yaml)" if root else ""
+    sys.stdout.write(_SESSION_RULES.replace("by pii-airlock:", f"by pii-airlock{where}:", 1) + "\n")
