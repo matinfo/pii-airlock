@@ -8,16 +8,17 @@ that pii-airlock cannot sit in front of.
 ### 1. Hide
 
 ```bash
-pii-airlock scrub notes.txt --map notes.pii-map.json -o notes.clean.txt
+pii-airlock scrub notes.txt -o notes.clean.txt
 ```
 
 - `notes.clean.txt` is safe to share. It contains placeholders.
-- `notes.pii-map.json` is the **key to undo it**. Keep it private. See the warning below.
+- The **key to undo it** (the mapping) is kept, encrypted, in your project's `.pii-airlock/maps/`
+  (outside a project: `~/.local/state/pii-airlock/maps/`). Git ignores it.
 
 You can also pipe text in:
 
 ```bash
-echo "Contact Jean Dupont at jean@acme.fr" | pii-airlock scrub --map m.pii-map.json
+echo "Contact Jean Dupont at jean@acme.fr" | pii-airlock scrub
 ```
 
 ```text
@@ -33,14 +34,15 @@ Paste `notes.clean.txt` into the AI. It answers using the placeholders.
 Save the answer to a file, say `answer.txt`, then:
 
 ```bash
-pii-airlock restore answer.txt --map notes.pii-map.json -o answer.final.txt
+pii-airlock restore answer.txt -o answer.final.txt
 ```
 
 The placeholders are replaced by the real names and emails.
 
-::: danger The map file contains the real data
-Never email it, upload it or commit it to Git. Delete it when you have finished restoring.
-If you do not need to restore, use `--no-map`, which makes the cleanup one-way.
+::: danger The mapping contains the real data
+It is encrypted with a key that stays on this computer, so it only opens here. If you write it
+elsewhere with `--map FILE`, it is plain JSON: never email, upload or commit that file. Delete
+mappings when you have finished restoring. If you never need to restore, use `--no-map`.
 :::
 
 ## Which files work?

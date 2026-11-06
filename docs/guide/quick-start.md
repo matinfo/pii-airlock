@@ -27,22 +27,26 @@ pipx install "pii-airlock[proxy]"
 pipx puts pii-airlock in its own private space, so it never interferes with your other Python projects.
 On macOS you can use Homebrew instead; see [Install, all options](/guide/install).
 
-## 3. Run the guided setup
+## 3. Guard your project
 
 ```bash
+cd my-project
 pii-airlock init
 ```
 
-This checks the install and downloads the language models used to spot names.
-The first download can take a few minutes. You only do it once.
-
-You should end with:
+This creates a `.pii-airlock/` folder in the project, installs the hooks for Claude Code and
+GitHub Copilot if you have them, and downloads the language models used to spot names (a few
+minutes, once). You should end with:
 
 ```text
-Setup complete.
+Done. `pii-airlock status` shows the setup; `pii-airlock off` pauses it here.
 ```
 
-If you see `Setup incomplete`, the lines above it say what to run. Fix that, then run `pii-airlock init` again.
+If a line says `[needs action]`, run what it says, then `pii-airlock init` again.
+
+**Using Claude Code or Copilot? You are done.** In this project, prompts and tool calls with
+personal data are now stopped before they leave your computer. Run `pii-airlock init` in each
+project you want guarded. The steps below are for chat apps and SDKs.
 
 ## 4. Start the gateway
 

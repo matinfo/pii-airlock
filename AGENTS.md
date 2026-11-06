@@ -60,9 +60,13 @@ Claude Code is agentic — it moves files and runs commands. Use the **hooks** s
 PII is surfaced without disturbing the tool loop:
 
 ```bash
-pii-airlock install-hook            # both events, project scope
-pii-airlock install-hook --scope user
+cd my-project
+pii-airlock init      # creates .pii-airlock/, installs the user-level hooks once
 ```
+
+The hooks are installed for your user but only act in projects that have a
+`.pii-airlock/` folder (`pii-airlock off` pauses one, `pii-airlock status` shows the state).
+At session start Claude is told the project's rules.
 
 | Leak vector | Covered by |
 |---|---|
@@ -152,7 +156,8 @@ Copilot has three surfaces; only some can be guarded.
 | Surface | Covered by | Notes |
 |---|---|---|
 | Copilot Chat / agent mode in VS Code with **your own model** | gateway | Add a *Custom Endpoint* model (below). Needs your own API key. |
-| Copilot CLI and the cloud agent: tool calls | hook | `pii-airlock install-hook --target copilot` |
+| Copilot CLI and VS Code agent mode: tool calls | hook | `pii-airlock init` (user hook, guarded projects only) |
+| Copilot cloud agent: tool calls | hook | `pii-airlock install-hook --target copilot` (repo file) |
 | Default Copilot models, inline suggestions, prompts in the CLI | **not covered** | GitHub's backend has no base-URL setting; bring-your-own-key does not apply to inline suggestions; Copilot ignores a `userPromptSubmitted` hook's output, so prompts cannot be blocked by a hook. |
 
 **VS Code, custom model through the gateway** (`chatLanguageModels.json`, via *Manage Models*).
@@ -187,8 +192,10 @@ Give the full URL; the gateway forwards your key and scrubs the request:
 
 (`apiType: responses` works too, with `http://127.0.0.1:8745/openai/v1/responses`.)
 
-**Copilot CLI / cloud agent / VS Code agent mode, hook.** `pii-airlock install-hook --target copilot`
-writes `.github/hooks/pii-airlock.json` (`--scope user`: `~/.copilot/hooks/`, or `$COPILOT_HOME`).
+**Copilot CLI / cloud agent / VS Code agent mode, hook.** `pii-airlock init` writes
+`~/.copilot/hooks/pii-airlock.json` (or under `$COPILOT_HOME`) when Copilot is found; the hook then
+acts only in projects with a `.pii-airlock/` folder. For the cloud agent,
+`pii-airlock install-hook --target copilot` writes the repo's `.github/hooks/pii-airlock.json`.
 It registers `preToolUse` with no matcher, so it sees every tool call, and runs the same checks as
 for Claude Code (`hook_decision`, `entity_actions: block`, `hook_on_error`).
 
@@ -205,9 +212,9 @@ for Claude Code (`hook_decision`, `entity_actions: block`, `hook_on_error`).
   tool call, so detection failures fail closed. A hook **timeout is fail-open**: keep the
   daemon on (`hook_daemon: auto`, the default) so calls stay far below the 30 s default. The
   cloud agent treats `ask` as `deny` and honours only the `bash` command.
-- **One install is enough.** Copilot CLI also reads a repository's `.claude/settings.json`, so
-  if you ran `install-hook` for Claude Code the Copilot CLI already runs the same hook there.
-  Don't add the Copilot file as well: every call would be scanned twice.
+- **One install is enough.** Copilot CLI also reads a repository's `.claude/settings.json`: if
+  you registered the Claude Code hook there by hand (`install-hook --scope project`), don't add
+  the Copilot file as well, or every call is scanned twice. `init` writes neither.
 
 > The Claude Code side is tested end to end. The Copilot side follows GitHub's and VS Code's
 > published hook specs but has not been run against a live Copilot session. If a tool call

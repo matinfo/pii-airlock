@@ -1,5 +1,5 @@
 # pii-airlock default configuration.
-# Override at ~/.config/pii-airlock/config.yaml or project ./.pii-airlock.yaml,
+# Override at ~/.config/pii-airlock/config.yaml or the project's .pii-airlock/config.yaml,
 # then by CLI flags (highest priority).
 
 # Languages to detect. Each must have an entry in `models` below and the
@@ -55,6 +55,12 @@ gliner_model: urchade/gliner_multi_pii-v1
 # analyzed again. Only a digest of each text and the detected offsets are kept,
 # never the text. 0 disables the cache (and batched pre-analysis).
 analysis_cache_size: 2048
+
+# Where the hooks run (user-level config only; a project cannot change it):
+#   project -> only in projects that ran `pii-airlock init` (a .pii-airlock/ folder
+#              at or above the working directory), like CodeGraph. `pii-airlock off` undoes it.
+#   always  -> in every directory
+activation: project
 
 # Default decision returned by the Claude Code hooks when PII is found:
 #   ask  -> surface the PII and let the user confirm (recommended)

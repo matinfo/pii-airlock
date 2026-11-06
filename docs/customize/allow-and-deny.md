@@ -32,21 +32,17 @@ pii-airlock allow "Jane Roe" --scope user      # your own name, in all projects
 ## See what is in force
 
 ```bash
-pii-airlock policy show
+pii-airlock status
 ```
 
-It prints the rules that apply right now and where each came from.
+It prints the rules that apply right now.
 
-## Create a policy file for a project
+## The project policy file
 
-```bash
-pii-airlock policy init
-```
+`pii-airlock init` creates `.pii-airlock/config.yaml`. It is a plain YAML file, committed with the
+project, so your team shares it. `allow`, `deny` and `action` edit it; you can also edit it by hand:
 
-This creates `.claude/skills/pii-airlock/SKILL.md`. Claude Code reads it as instructions about handling personal
-data, and pii-airlock reads the settings block inside it. It is a normal text file you can edit and share with your team.
-
-```yaml pii-airlock
+```yaml
 allow_list: [Acme SA]
 deny_list:
   CODENAME: [Project Phoenix]
@@ -62,9 +58,8 @@ pii-airlock combines several layers. Later ones win:
 
 1. Built-in defaults
 2. Your personal file `~/.config/pii-airlock/config.yaml`
-3. A project file `.pii-airlock.yaml`
-4. A project policy `.claude/skills/pii-airlock/SKILL.md`
-5. Command-line options
+3. The project policy `.pii-airlock/config.yaml`
+4. Command-line options
 
 Allow lists, deny lists and custom patterns **add up** across layers. Every other setting is replaced by the later layer.
 
@@ -73,11 +68,11 @@ Allow lists, deny lists and custom patterns **add up** across layers. Every othe
 A project's settings can *loosen* protection, for example by allowing a name. So for a repository you did not
 write, pii-airlock only applies the settings that **tighten** protection until you say otherwise.
 
-After reading the project's policy files, accept them:
+After reading `.pii-airlock/config.yaml`, accept it:
 
 ```bash
 pii-airlock trust
 ```
 
-Do this again after a `git pull` that changes them. `pii-airlock policy show` tells you what is currently being ignored.
+Do this again after a `git pull` that changes it. `pii-airlock status` tells you what is currently being ignored.
 Your own rules in `~/.config/pii-airlock/config.yaml` are always trusted.

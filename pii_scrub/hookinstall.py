@@ -19,11 +19,12 @@ HOOK_SPECS: dict[str, tuple[str, str | None]] = {
         "Bash|Write|Edit|MultiEdit|NotebookEdit|Read|Grep|WebFetch|WebSearch|mcp__.*",
     ),
     "UserPromptSubmit": ("pii-airlock hook user-prompt-submit", None),
+    "SessionStart": ("pii-airlock hook session-start", None),
 }
 
 # CLI --event value -> list of settings event names
 EVENT_CHOICES: dict[str, list[str]] = {
-    "both": ["PreToolUse", "UserPromptSubmit"],
+    "both": ["PreToolUse", "UserPromptSubmit", "SessionStart"],
     "tool": ["PreToolUse"],
     "prompt": ["UserPromptSubmit"],
 }
@@ -114,3 +115,37 @@ def install_copilot(scope: str) -> tuple[Path, bool]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return path, True
+
+
+# --- What is installed (for `init` and `status`) ----------------------------
+
+
+def claude_present() -> bool:
+    return USER_SETTINGS.parent.is_dir()
+
+
+def claude_plugin_enabled() -> bool:
+    """The pii-airlock Claude Code plugin is enabled for the user."""
+    try:
+        plugins = _load(USER_SETTINGS).get("enabledPlugins") or {}
+    except (OSError, ValueError):
+        return False
+    return any(name.split("@")[0] == "pii-airlock" and on for name, on in plugins.items())
+
+
+def claude_hook_installed(scope: str) -> bool:
+    try:
+        groups = _load(settings_path(scope)).get("hooks", {}).get("PreToolUse", [])
+    except (OSError, ValueError):
+        return False
+    return _find_group(groups, HOOK_SPECS["PreToolUse"][0]) is not None
+
+
+def copilot_present() -> bool:
+    import shutil
+
+    return copilot_hook_path("user").parent.parent.is_dir() or shutil.which("copilot") is not None
+
+
+def copilot_hook_installed(scope: str) -> bool:
+    return copilot_hook_path(scope).is_file()

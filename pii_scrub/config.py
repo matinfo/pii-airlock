@@ -3,9 +3,8 @@
 Override chain (lowest -> highest priority):
     bundled config.default.yaml
     ~/.config/pii-airlock/config.yaml
-    ~/.claude/skills/pii-airlock/SKILL.md      (policy block, see policy.py)
-    ./.pii-airlock.yaml
-    ./.claude/skills/pii-airlock/SKILL.md      (policy block)
+    <project>/.pii-airlock/config.yaml         (nearest project home, see project.py;
+                                               tighten-only until trusted, see trust.py)
     CLI flags (applied by the caller)
 
 `allow_list`, `deny_list`, `custom_patterns` and `entity_actions` accumulate
@@ -22,14 +21,14 @@ from typing import Any
 
 import yaml
 
-from .policy import normalize_deny, read_policy, skill_path
+from .policy import normalize_deny, read_policy
+from .project import config_path, find_project
 from .trust import is_trusted, tighten_only
 
 # Shipped inside the package so it is always found, however pii-airlock is installed.
 _DEFAULT_FILE = Path(__file__).resolve().parent / "config.default.yaml"
 _CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-_USER_FILE = _CONFIG_HOME / "pii-airlock" / "config.yaml"
-_PROJECT_NAME = ".pii-airlock.yaml"
+USER_FILE = _CONFIG_HOME / "pii-airlock" / "config.yaml"
 
 # Built-in defaults. These make pii-airlock work even if no config file is found,
 # so an install can never end up with an empty model map. The bundled
@@ -63,6 +62,7 @@ class Config:
     analysis_cache_size: int = 2048
     ner_backend: str = "spacy"
     gliner_model: str = "urchade/gliner_multi_pii-v1"
+    activation: str = "project"  # project: only where `pii-airlock init` ran; always: everywhere
     hook_decision: str = "ask"
     prompt_decision: str = "block"
     hook_on_error: str = "closed"
@@ -161,24 +161,17 @@ def load_config(
 ) -> Config:
     """Build a Config from the default file, then user/project layers, then overrides.
 
-    `cwd` is the project directory (defaults to the current directory); hooks
-    pass the directory Claude Code reports, so the right project policy applies.
+    `cwd` is where to look for the project home (it, or a parent; defaults to the
+    current directory). Hooks pass the directory the harness reports.
     """
-    project = Path(cwd) if cwd else Path.cwd()
     cfg = Config().merged_with(_read_yaml(_DEFAULT_FILE))
-    cfg = cfg.merged_with(_read_yaml(_USER_FILE))
-    cfg = cfg.merged_with(read_policy(skill_path("user")))
-    layers = [_read_yaml(project / _PROJECT_NAME), read_policy(skill_path("project", project))]
-    if is_trusted(project):
-        for layer in layers:
-            cfg = cfg.merged_with(layer)
-    else:
-        ignored: list[str] = []
-        for layer in layers:
-            safe, dropped = tighten_only(layer)
-            cfg = cfg.merged_with(safe)
-            ignored += dropped
-        cfg = replace(cfg, ignored_project_keys=sorted(set(ignored)))
+    cfg = cfg.merged_with(read_policy(USER_FILE))
+    project = find_project(cwd)
+    if project is not None and is_trusted(project):
+        cfg = cfg.merged_with(read_policy(config_path(project)))
+    elif project is not None:
+        safe, dropped = tighten_only(read_policy(config_path(project)))
+        cfg = replace(cfg.merged_with(safe), ignored_project_keys=sorted(set(dropped)))
     if overrides:
         cfg = cfg.merged_with(overrides)
     return cfg

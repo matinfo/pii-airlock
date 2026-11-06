@@ -44,10 +44,10 @@ A cheat sheet. Run any command with `--help` for the full list of options.
 
 | Command | What it does |
 |---|---|
-| `pii-airlock install-hook` | Install both hooks for this project |
-| `--scope user` | Install for all projects |
-| `--event tool` or `--event prompt` | Install only one of the two |
-| `--target copilot` | Install for GitHub Copilot instead of Claude Code |
+| `pii-airlock init` | Guard this project (`.pii-airlock/`), install the user hooks once, get the models |
+| `pii-airlock status` | Is this project guarded, by which hooks, with which rules |
+| `pii-airlock off` / `on` | Pause / resume this project on this machine |
+| `pii-airlock install-hook` | Register hooks by hand: `--scope project\|user`, `--event tool\|prompt`, `--target copilot` |
 | `pii-airlock daemon status \| start \| stop` | Control the helper that keeps models loaded |
 
 ## Your rules
@@ -57,8 +57,6 @@ A cheat sheet. Run any command with `--help` for the full list of options.
 | `pii-airlock allow "TERM"` | Never treat this as personal data |
 | `pii-airlock deny "TERM" --as LABEL` | Always treat this as sensitive |
 | `pii-airlock action TYPE tokenize\|redact\|allow\|block` | Choose what happens to a type |
-| `pii-airlock policy init` | Create the project policy file |
-| `pii-airlock policy show` | Show the rules in force and their source |
 | `pii-airlock trust` | Accept this project's settings after reviewing them |
 
 `allow`, `deny` and `action` take `--scope project` (default) or `--scope user`.

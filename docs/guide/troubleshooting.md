@@ -81,13 +81,14 @@ Check the helper with `pii-airlock daemon status`.
 
 ### Every tool call is checked twice
 
-You installed the hooks twice, for example the plugin and `install-hook`, or `install-hook` for Claude Code and for Copilot
-in the same project. Keep one.
+You installed the hooks twice, for example the plugin and `install-hook --scope user`, or a project-level
+`install-hook` for Claude Code and one for Copilot in the same repository. `pii-airlock status` lists the hooks
+it finds. Keep one.
 
 ### A project's settings seem ignored
 
 If the project came from someone else, only settings that tighten protection apply until you run `pii-airlock trust`
-after reviewing the files. `pii-airlock policy show` lists what is being ignored.
+after reviewing the files. `pii-airlock status` lists what is being ignored.
 
 ## Developers
 

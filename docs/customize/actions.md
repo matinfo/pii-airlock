@@ -33,14 +33,14 @@ Messages say which type and how many, never the value.
 
 If you work with real customer data, this is a sensible policy:
 
-```yaml pii-airlock
+```yaml
 entity_actions:
   IBAN_CODE: redact
   CREDIT_CARD: block
   SECRET: block        # API keys and passwords never leave the machine
 ```
 
-Put it in `.pii-airlock.yaml` or in the block of your project policy.
+Put it in your project's `.pii-airlock/config.yaml`.
 
 ## Related names stay protected
 

@@ -48,7 +48,12 @@ def test_plugin_hooks_match_what_install_hook_registers():
             f'"${{CLAUDE_PLUGIN_ROOT}}"/hooks/launch.sh {wanted}']
 
 
-def _run(event, tmp_path, *, with_cli, env_extra=None, stdin=""):
+def _run(event, tmp_path, *, with_cli, env_extra=None, stdin="", guarded=True):
+    """Run the launcher from a project dir (guarded: it has a .pii-airlock/ home)."""
+    cwd = tmp_path / "proj" / "sub"
+    cwd.mkdir(parents=True, exist_ok=True)
+    if guarded:
+        (tmp_path / "proj" / ".pii-airlock").mkdir(exist_ok=True)
     bindir = tmp_path / "bin"
     bindir.mkdir(exist_ok=True)
     if with_cli:
@@ -58,7 +63,7 @@ def _run(event, tmp_path, *, with_cli, env_extra=None, stdin=""):
     # Only the system dirs plus ours: a real pii-airlock on the dev machine must not leak in.
     env = {"PATH": f"{bindir}:/usr/bin:/bin", **(env_extra or {})}
     return subprocess.run([str(LAUNCH), event], input=stdin, capture_output=True, text=True,
-                          env=env, check=False)
+                          env=env, cwd=cwd, check=False)
 
 
 @posix
@@ -94,6 +99,13 @@ def test_launcher_forwards_event_and_stdin_to_the_cli(tmp_path):
 
 
 @posix
-def test_session_start_is_silent_when_the_cli_is_present(tmp_path):
+@pytest.mark.parametrize("event", ["pre-tool-use", "user-prompt-submit", "session-start"])
+def test_missing_cli_does_not_block_unguarded_projects(tmp_path, event):
+    result = _run(event, tmp_path, with_cli=False, guarded=False)
+    assert result.returncode == 0 and result.stdout == "" and result.stderr == ""
+
+
+@posix
+def test_session_start_is_forwarded_to_the_cli(tmp_path):
     result = _run("session-start", tmp_path, with_cli=True)
-    assert result.returncode == 0 and result.stdout == ""
+    assert result.returncode == 0 and "args:hook session-start" in result.stdout

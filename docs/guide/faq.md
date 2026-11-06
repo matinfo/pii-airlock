@@ -46,7 +46,7 @@ The file mapping backend and its settings are covered in [Settings](/reference/s
 
 ## Does it work on Windows?
 
-Yes. macOS, Linux and Windows are tested in CI. The Claude Code **plugin** needs a shell script, so on Windows use `install-hook` instead.
+Yes. macOS, Linux and Windows are tested in CI. The Claude Code **plugin** needs a shell script, so on Windows use `pii-airlock init` without the plugin.
 
 ## How do I update or remove it?
 

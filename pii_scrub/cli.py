@@ -29,9 +29,6 @@ daemon_app = typer.Typer(
     help="Hook daemon: keeps the models loaded so hooks answer in milliseconds."
 )
 app.add_typer(daemon_app, name="daemon")
-policy_app = typer.Typer(help="Per-project PII policy (Claude Code SKILL.md).",
-                         no_args_is_help=True)
-app.add_typer(policy_app, name="policy")
 
 
 def _version_cb(value: bool) -> None:
@@ -97,7 +94,18 @@ def _write_output(out: Path | None, data: str | bytes) -> None:
 
 def _default_map_path(file: Path | None) -> Path:
     base = file.name if file else "stdin"
-    return Path(f"{base}.pii-map.json")
+    return _maps_home() / f"{base}.pii-map.json"
+
+
+def _maps_home() -> Path:
+    """Where `scrub` keeps mappings: the project's .pii-airlock/maps/, else the state dir.
+
+    Never next to the file: mapping files hold real PII and must not be committed."""
+    from .mapping_store import default_state_dir
+    from .project import find_project, maps_dir, private_dir
+
+    root = find_project()
+    return private_dir(maps_dir(root) if root else default_state_dir() / "maps")
 
 
 @app.command()
@@ -151,9 +159,10 @@ def scrub(
 
     if not no_map:
         target = map_path or _default_map_path(file)
-        key = mapping_crypto.default_key() if encrypt_map else None
+        encrypt = encrypt_map or map_path is None  # the default location is always encrypted
+        key = mapping_crypto.default_key() if encrypt else None
         mapping.save(target, encrypt_key=key)
-        kind = "encrypted mapping" if encrypt_map else "Mapping"
+        kind = "Encrypted mapping" if encrypt else "Mapping"
         typer.echo(f"{kind} ({len(mapping)} entries) saved to {target}", err=True)
 
 
@@ -167,21 +176,31 @@ def _load_map(path: Path) -> Mapping:
 @app.command()
 def restore(
     file: Path | None = typer.Argument(None, help="Scrubbed file; omit to read stdin."),
-    map_path: Path = typer.Option(..., "--map", help="Mapping file from `scrub`."),
+    map_path: Path | None = typer.Option(
+        None, "--map", help="Mapping file from `scrub`; default: every mapping of this project."),
     out: Path | None = typer.Option(None, "-o", "--out", help="Output file; omit for stdout."),
 ) -> None:
-    """Swap tokens back to their original values using a mapping file."""
-    if not map_path.is_file():
+    """Swap tokens back to their original values."""
+    if map_path is not None and not map_path.is_file():
         typer.echo(f"Mapping file not found: {map_path}", err=True)
         raise typer.Exit(code=1)
+    # Newest first: with sequential tokens (<PERSON_1>) the latest scrub wins; stable
+    # tokens are unique per value, so the order does not matter.
+    paths = [map_path] if map_path else sorted(
+        _maps_home().glob("*.pii-map.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not paths:
+        typer.echo(f"No mapping in {_maps_home()}: run `scrub` first, or pass --map.", err=True)
+        raise typer.Exit(code=1)
     try:
-        mapping = _load_map(map_path)
+        mappings = [_load_map(path) for path in paths]
     except mapping_crypto.MappingDecryptError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None
     text = _read_input(file, binary=False)
     assert isinstance(text, str)
-    _write_output(out, mapping.restore(text))
+    for mapping in mappings:
+        text = mapping.restore(text)
+    _write_output(out, text)
 
 
 @app.command()
@@ -341,63 +360,167 @@ def download_models(
 
 @app.command()
 def init(
-    host: str = typer.Option("127.0.0.1", "--host", help="Gateway bind address."),
-    port: int = typer.Option(8745, "--port", help="Gateway bind port."),
+    hooks: bool = typer.Option(True, "--hooks/--no-hooks",
+                               help="Install the user-level hooks for Claude Code / Copilot."),
     skip_models: bool = typer.Option(
         False, "--skip-models", help="Skip model install/check during setup."
     ),
+    host: str = typer.Option("127.0.0.1", "--host", help="Gateway address shown in the hints."),
+    port: int = typer.Option(8745, "--port", help="Gateway port shown in the hints."),
 ) -> None:
-    """Guided first-time setup for the gateway workflow."""
-    typer.echo("pii-airlock setup", err=True)
-    typer.echo("-----------------", err=True)
+    """Guard this project: create .pii-airlock/, install the hooks, check the models."""
+    from .project import config_path, init_project
+    from .trust import is_trusted, trust
+
+    root = Path.cwd()
+    shipped = config_path(root).is_file() and not is_trusted(root)
+    created = init_project(root)
+    if not shipped:
+        trust(root)  # the config is yours (new, or already trusted)
+    typer.echo(f"[ok] {'Guarding' if created else 'Already guarding'} {root} "
+               f"(policy: .pii-airlock/config.yaml)", err=True)
+    if shipped:
+        typer.echo("[needs review] .pii-airlock/config.yaml came with the repo: only settings "
+                   "that tighten protection apply until you run `pii-airlock trust`.", err=True)
 
     ok = True
-    missing_deps = _missing_proxy_deps()
-    if missing_deps:
-        ok = False
-        typer.echo(f"[needs action] Missing gateway deps: {', '.join(missing_deps)}", err=True)
-        typer.echo("  Run: pipx inject pii-airlock 'pii-airlock[proxy]'", err=True)
-    else:
-        typer.echo("[ok] Gateway dependencies installed", err=True)
+    if hooks:
+        for line in _ensure_hooks():
+            typer.echo(line, err=True)
 
     config = _build_config(None, None)
     models = _configured_models(config)
-    if not models:
-        ok = False
-        typer.echo("[needs action] No spaCy models configured.", err=True)
+    missing = [m for m in models if not _model_installed(m)]
+    if not missing:
+        typer.echo("[ok] Detection models installed", err=True)
     elif skip_models:
-        missing_models = [model for model in models if not _model_installed(model)]
-        if missing_models:
-            ok = False
-            typer.echo(
-                f"[needs action] Missing models: {', '.join(missing_models)} "
-                "(run `pii-airlock download-models`)",
-                err=True,
-            )
-        else:
-            typer.echo("[ok] Required spaCy models already installed", err=True)
+        ok = False
+        typer.echo(f"[needs action] Missing models: {', '.join(missing)} "
+                   "(run `pii-airlock download-models`)", err=True)
     else:
         try:
             download_models(None)
-            typer.echo("[ok] spaCy model setup complete", err=True)
+            typer.echo("[ok] Detection models installed", err=True)
         except typer.Exit as exc:
-            ok = False
             if exc.exit_code not in (0, None):
+                ok = False
                 typer.echo("[needs action] Model setup needs manual completion.", err=True)
 
-    typer.echo("\nNext commands:", err=True)
+    typer.echo("\nOptional, for chat clients (Cursor, Codex, SDKs): the gateway", err=True)
+    if _missing_proxy_deps():
+        typer.echo("  pipx inject pii-airlock 'pii-airlock[proxy]'", err=True)
     typer.echo("  pii-airlock proxy", err=True)
-    for line in _env_export_examples(host, port):
+    for line in _env_export_examples(host, port)[:1]:
         typer.echo(f"  {line}", err=True)
 
-    if ok:
-        typer.echo("\nSetup complete.", err=True)
-    else:
-        typer.echo(
-            "\nSetup incomplete. Run the commands above, then retry `pii-airlock init`.",
-            err=True,
-        )
+    if not ok:
+        typer.echo("\nAlmost there: fix the [needs action] lines, then run "
+                   "`pii-airlock status`.", err=True)
         raise typer.Exit(code=1)
+    typer.echo("\nDone. `pii-airlock status` shows the setup; `pii-airlock off` pauses it here.",
+               err=True)
+
+
+def _ensure_hooks() -> list[str]:
+    """Install the user-level hooks for the agents found on this machine (idempotent).
+
+    User level, because they stay silent outside guarded projects: one install, then
+    `pii-airlock init` per project. Nothing is written into the repo.
+    """
+    from . import hookinstall as hi
+
+    lines = []
+    if hi.claude_plugin_enabled():
+        lines.append("[ok] Claude Code: pii-airlock plugin")
+    elif hi.claude_present():
+        _, added = hi.install("both", "user")
+        lines.append(f"[ok] Claude Code: hooks {'installed' if added else 'present'} "
+                     f"in {hi.settings_path('user')}")
+    if hi.copilot_present():
+        path, changed = hi.install_copilot("user")
+        lines.append(f"[ok] GitHub Copilot: hook {'installed' if changed else 'present'} in {path}")
+    if not lines:
+        lines.append("[info] No Claude Code or Copilot found: hooks not installed. "
+                     "Use the gateway, or rerun `pii-airlock init` after installing one.")
+    return lines
+
+
+def _require_project() -> Path:
+    from .project import find_project
+
+    root = find_project()
+    if root is None:
+        typer.echo("This directory is not guarded (no .pii-airlock/ here or above). "
+                   "Run `pii-airlock init`.", err=True)
+        raise typer.Exit(code=1)
+    return root
+
+
+@app.command()
+def off() -> None:
+    """Pause pii-airlock in this project, on this machine (policy and maps are kept)."""
+    from .project import pause
+
+    root = _require_project()
+    typer.echo(f"Paused in {root}. `pii-airlock on` resumes." if pause(root)
+               else f"Already paused in {root}.")
+
+
+@app.command()
+def on() -> None:
+    """Resume pii-airlock in this project."""
+    from .project import resume
+
+    root = _require_project()
+    typer.echo(f"Guarding {root} again." if resume(root) else f"Already guarding {root}.")
+
+
+@app.command()
+def status() -> None:
+    """Is this directory guarded, by which hooks, with which policy."""
+    from . import hookinstall as hi
+    from .project import config_path, find_project, is_paused, maps_dir
+
+    config = _build_config(None, None)
+    root = find_project()
+    if root is not None and is_paused(root):
+        state = f"PAUSED  {root}  (`pii-airlock on` resumes)"
+    elif root is not None:
+        state = f"on      {root}"
+    elif config.activation == "always":
+        state = "on      every directory (activation: always)"
+    else:
+        state = "off     not a guarded project (`pii-airlock init` guards it)"
+    typer.echo(f"status   {state}")
+
+    hooks = []
+    if hi.claude_plugin_enabled():
+        hooks.append("Claude Code plugin")
+    for scope in ("user", "project"):
+        if hi.claude_hook_installed(scope):
+            hooks.append(f"Claude Code ({scope})")
+        if hi.copilot_hook_installed(scope):
+            hooks.append(f"Copilot ({scope})")
+    typer.echo(f"hooks    {', '.join(hooks) or 'none (`pii-airlock init` installs them)'}")
+    typer.echo(f"daemon   {_daemon_status(config)}")
+
+    if root is not None:
+        maps = list(maps_dir(root).glob("*.pii-map.json")) if maps_dir(root).is_dir() else []
+        typer.echo(f"policy   {config_path(root)}")
+        typer.echo(f"maps     {len(maps)} in {maps_dir(root)}")
+    typer.echo(f"allow    {', '.join(config.allow_list) or '-'}")
+    for entity, terms in config.deny_list.items() or {"": []}.items():
+        typer.echo(f"deny     {entity + ': ' if entity else ''}{', '.join(terms) or '-'}")
+    for pattern in config.custom_patterns:
+        typer.echo(f"pattern  {pattern.get('entity')}  {pattern.get('regex')}")
+    for entity, what in config.entity_actions.items():
+        typer.echo(f"action   {entity}: {what}")
+    typer.echo(f"decide   tools: {config.hook_decision}   prompts: {config.prompt_decision}   "
+               f"on error: {config.hook_on_error}")
+    if config.ignored_project_keys:
+        typer.echo("NOT TRUSTED: this project's config came with the repo, so only settings that "
+                   f"tighten protection apply (ignored: {', '.join(config.ignored_project_keys)}). "
+                   "Review it, then run `pii-airlock trust`.")
 
 
 @app.command()
@@ -505,6 +628,10 @@ def install_hook(
             typer.echo("--scope must be 'project' or 'user'", err=True)
             raise typer.Exit(code=1)
         path, changed = install_copilot(scope)
+        if scope == "project":
+            from .project import init_project
+
+            init_project(Path.cwd())
         typer.echo(f"{'Installed' if changed else 'Already present:'} Copilot preToolUse hook "
                    f"in {path}. Prompts are not hookable in Copilot: route chat through the "
                    "gateway (see AGENTS.md).")
@@ -517,6 +644,10 @@ def install_hook(
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None
+    if scope == "project":
+        from .project import init_project
+
+        init_project(Path.cwd())  # a project hook is inert without the project home
     if added:
         typer.echo(f"Installed hooks {', '.join(added)} in {path}")
     else:
@@ -524,62 +655,42 @@ def install_hook(
 
 
 def _scope_path(scope: str) -> Path:
-    from .policy import skill_path
+    from .config import USER_FILE
+    from .project import config_path
 
-    if scope not in ("project", "user"):
+    if scope == "user":
+        return USER_FILE
+    if scope != "project":
         typer.echo("--scope must be 'project' or 'user'", err=True)
         raise typer.Exit(code=1)
-    return skill_path(scope)
+    return config_path(_require_project())
 
 
 def _policy_change(fn, path: Path, *args) -> bool:
     """Run a policy edit; keep a trusted project trusted, never trust an unreviewed one."""
-    from .policy import PolicyError, skill_path
+    from .policy import PolicyError
+    from .project import HOME
     from .trust import is_trusted, trust
 
-    project = Path.cwd()
-    is_project = path == skill_path("project", project)
-    was_trusted = is_project and is_trusted(project)
+    project = path.parent.parent if path.parent.name == HOME else None
+    was_trusted = project is not None and is_trusted(project)
     try:
         changed = fn(path, *args)
     except PolicyError as exc:
-        typer.echo(f"{exc}\nFix the policy block by hand, then retry.", err=True)
+        typer.echo(f"{exc}\nFix the file by hand, then retry.", err=True)
         raise typer.Exit(code=1) from None
-    if is_project and was_trusted:
-        trust(project)  # you just ran this: the files are yours
-    elif is_project:
+    if project is not None and was_trusted:
+        trust(project)  # you just ran this: the file is yours
+    elif project is not None:
         typer.echo("Note: this project's pii-airlock config came with the repo and is not "
                    "trusted, so settings that let more through are ignored. Review it, then "
                    "run `pii-airlock trust`.", err=True)
     return changed
 
 
-@policy_app.command("init")
-def policy_init(
-    scope: str = typer.Option("project", "--scope", help="project | user"),
-    force: bool = typer.Option(False, "--force", help="Overwrite an existing SKILL.md."),
-) -> None:
-    """Create the policy skill (.claude/skills/pii-airlock/SKILL.md)."""
-    from .policy import init_skill
-
-    path = _scope_path(scope)
-    from .policy import skill_path
-    from .trust import is_trusted, trust
-
-    project = Path.cwd()
-    was_trusted = path == skill_path("project", project) and is_trusted(project)
-    if init_skill(path, force=force):
-        if was_trusted:
-            trust(project)
-        typer.echo(f"Created {path}")
-        typer.echo("Next: pii-airlock allow \"Your Company\"  /  pii-airlock deny \"Client X\"")
-    else:
-        typer.echo(f"{path} already exists — nothing to do (use --force to overwrite).")
-
-
 @app.command()
 def trust() -> None:
-    """Trust this project's .pii-airlock.yaml and SKILL.md policy as they are now.
+    """Trust this project's .pii-airlock/config.yaml as it is now.
 
     Project config can loosen protection (allow lists, `hook_on_error: open`...),
     so a project that came with a repo only gets its tightening settings applied
@@ -588,38 +699,9 @@ def trust() -> None:
     """
     from . import trust as trust_mod
 
-    project = Path.cwd()
-    if not trust_mod.has_project_config(project):
-        typer.echo("No project config here — nothing to trust.")
-        return
-    trust_mod.trust(project)
-    typer.echo(f"Trusted the pii-airlock config of {project}")
-
-
-@policy_app.command("show")
-def policy_show() -> None:
-    """Show the effective policy for the current project and where it comes from."""
-    from .policy import skill_path
-
-    config = _build_config(None, None)
-    for scope in ("user", "project"):
-        path = skill_path(scope)
-        typer.echo(f"{scope:<8} {path}  {'(found)' if path.is_file() else '(none)'}")
-    typer.echo(f"allow_list:      {', '.join(config.allow_list) or '-'}")
-    for entity, terms in config.deny_list.items():
-        typer.echo(f"deny_list {entity}: {', '.join(terms)}")
-    if not config.deny_list:
-        typer.echo("deny_list:       -")
-    for pattern in config.custom_patterns:
-        typer.echo(f"custom pattern:  {pattern.get('entity')}  {pattern.get('regex')}")
-    for entity, what in config.entity_actions.items():
-        typer.echo(f"action {entity}: {what}")
-    if config.ignored_project_keys:
-        typer.echo("NOT TRUSTED project config: only settings that tighten protection apply; "
-                   f"ignored: {', '.join(config.ignored_project_keys)}. "
-                   "Review it, then run `pii-airlock trust`.")
-    typer.echo(f"hook_decision: {config.hook_decision}   prompt_decision: "
-               f"{config.prompt_decision}   hook_on_error: {config.hook_on_error}")
+    root = _require_project()
+    trust_mod.trust(root)
+    typer.echo(f"Trusted {root}/.pii-airlock/config.yaml")
 
 
 @app.command()
@@ -683,6 +765,14 @@ def hook_user_prompt_submit() -> None:
     from .hooks._common import run_user_prompt_submit
 
     run_user_prompt_submit()
+
+
+@hook_app.command("session-start")
+def hook_session_start() -> None:
+    """SessionStart hook: tells Claude the project's PII rules when it is guarded."""
+    from .hooks._common import run_session_start
+
+    run_session_start()
 
 
 def _daemon_status(config) -> str:

@@ -8,15 +8,17 @@ description: Set up or check pii-airlock, the PII guard for this project. Use wh
 The plugin's hooks call the `pii-airlock` CLI. Work through these steps and stop at the first failure.
 
 1. **CLI installed?** Run `pii-airlock --version`. If missing, ask the user to install it:
-   `brew install matinfo/tap/pii-airlock` or `pipx install "pii-airlock[proxy]"`.
-   Until then the hooks block every prompt and tool call (fail closed).
-2. **Models downloaded?** Run `pii-airlock doctor`. If a spaCy model is missing, run
-   `pii-airlock download-models` (a few hundred MB, once).
-3. **Project policy (optional).** `pii-airlock policy show` prints the active policy.
-   - `pii-airlock policy init` creates `.claude/skills/pii-airlock/SKILL.md` for this project.
+   `brew install matinfo/tap/pii-airlock` or `pipx install pii-airlock`.
+   Until then the hooks block every prompt and tool call in guarded projects (fail closed).
+2. **Project guarded?** Run `pii-airlock status`. If it says `off`, ask the user before running
+   `pii-airlock init` in the project root: it creates `.pii-airlock/` (policy + local maps) and
+   downloads the detection models (a few hundred MB, once). It sees the plugin and does not
+   install duplicate hooks.
+3. **Project policy (optional).** Lives in `.pii-airlock/config.yaml`; `pii-airlock status` shows it.
    - `pii-airlock allow "<value>"` / `deny "<value>"` edit the allow and deny lists.
    - `pii-airlock action PERSON redact` (or `tokenize`, `allow`, `block`) sets what happens per entity type.
 4. **Project config from a cloned repo is untrusted** until the user reviews it and runs
    `pii-airlock trust`. Never run `trust` on the user's behalf for a repo they did not write.
+5. **Pause:** `pii-airlock off` / `pii-airlock on`, only when the user asks.
 
-Never print or open `*.pii-map.json` files: they hold the real values.
+Never print or open files under `.pii-airlock/maps/` or `*.pii-map.json`: they hold the real values.

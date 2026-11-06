@@ -1,14 +1,14 @@
 """Which projects may loosen protection (direnv-style trust).
 
-A project's ``.pii-airlock.yaml`` and ``SKILL.md`` policy come with the repo: a
+A project's ``.pii-airlock/config.yaml`` comes with the repo: a
 cloned, untrusted repo could ship ``hook_on_error: open`` or
 ``entity_actions: {PERSON: allow}`` and switch your protections off. So project
 config is *tightened only* until you trust it: it may add deny-list terms and
 patterns, and raise actions/decisions to ``block`` / ``redact`` / ``deny``, but
 nothing that lets more through.
 
-Trust is a fingerprint of the project's policy files, stored in the state dir.
-Editing them with ``pii-airlock allow|deny|action|policy init`` re-trusts them
+Trust is a fingerprint of the project's config file, stored in the state dir.
+Editing them with ``pii-airlock init|allow|deny|action`` re-trusts it
 (you just ran it); a ``git pull`` that changes them does not, until you run
 ``pii-airlock trust``. User-level config is always trusted.
 """
@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .mapping_store import default_state_dir
 
-PROJECT_FILES = (Path(".pii-airlock.yaml"), Path(".claude") / "skills" / "pii-airlock" / "SKILL.md")
+PROJECT_FILES = (Path(".pii-airlock") / "config.yaml",)
 
 
 def _store() -> Path:
