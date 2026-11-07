@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0       # lets VitePress show "last updated" dates
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
