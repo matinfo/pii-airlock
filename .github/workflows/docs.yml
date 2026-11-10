@@ -34,7 +34,7 @@ jobs:
       - name: Build (fails on dead links)
         working-directory: docs
         run: npm run build
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:
           path: docs/.vitepress/dist
